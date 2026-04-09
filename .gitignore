@@ -40,10 +40,7 @@ temp/
 # Model artifacts, weights and checkpoints
 checkpoints/
 checkpoint/
-models/
 weights/
-results/
-runs/
 wandb/
 mlruns/
 outputs/
@@ -58,8 +55,23 @@ outputs/
 *.pb
 *.tflite
 
-# Data and caches
-data/
+# Models directory — ignore contents, keep structure
+models/**
+!models/**/
+!models/**/.gitkeep
+
+# Runs / results (only top-level)
+/results/
+/runs/
+
+# Data directory — ignore contents, keep structure & config
+data/**
+!data/**/
+!data/**/.gitkeep
+!data/data.yaml
+!data/collection_log.csv
+
+# Other data dirs
 datasets/
 raw_data/
 processed_data/
