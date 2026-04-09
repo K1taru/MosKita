@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MosKita Dataset Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0e12;
+    --surface: #111820;
+    --surface2: #162030;
+    --border: #1e3045;
+    --accent: #00e5ff;
+    --accent2: #ff4757;
+    --accent3: #ffd32a;
+    --text: #d8e8f0;
+    --muted: #5a7a90;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 0;
+  }
+
+  .card {
+    width: 540px;
+    background: var(--bg);
+    padding: 32px 28px 28px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Background grid texture */
+  .card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+    background-size: 28px 28px;
+    pointer-events: none;
+  }
+
+  /* Top accent line */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+  .topbar-line {
+    flex: 1;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+  }
+  .topbar-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+  .topbar-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent2);
+    animation: blink 1.4s ease-in-out infinite;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  /* Header */
+  .header {
+    margin-bottom: 24px;
+  }
+  .header-label {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .header-title {
+    font-size: 30px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    line-height: 1;
+    color: #ffffff;
+  }
+  .header-title span {
+    color: var(--accent);
+  }
+  .header-sub {
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  /* Sections */
+  .section {
+    margin-bottom: 18px;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .section-num {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--accent);
+    background: rgba(0,229,255,0.08);
+    border: 1px solid rgba(0,229,255,0.2);
+    padding: 2px 7px;
+    border-radius: 2px;
+    letter-spacing: 1px;
+  }
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #ffffff;
+  }
+  .section-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* Bullets */
+  ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding-left: 4px;
+  }
+  li {
+    font-size: 12px;
+    color: var(--text);
+    line-height: 1.5;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  li::before {
+    content: '▸';
+    color: var(--accent);
+    font-size: 10px;
+    margin-top: 1px;
+    flex-shrink: 0;
+  }
+  li b {
+    color: #ffffff;
+    font-weight: 700;
+  }
+  li .tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 2px;
+    vertical-align: middle;
+    display: inline-block;
+    margin-left: 3px;
+  }
+  .tag-red { background: rgba(255,71,87,0.15); color: var(--accent2); border: 1px solid rgba(255,71,87,0.25); }
+  .tag-yellow { background: rgba(255,211,42,0.12); color: var(--accent3); border: 1px solid rgba(255,211,42,0.22); }
+  .tag-cyan { background: rgba(0,229,255,0.10); color: var(--accent); border: 1px solid rgba(0,229,255,0.20); }
+
+  /* Grid layout for classes */
+  .class-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px 12px;
+  }
+
+  /* Shot matrix */
+  .matrix {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-top: 2px;
+  }
+  .matrix-cell {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    text-align: center;
+  }
+  .matrix-cell .m-val {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+  }
+  .matrix-cell .m-label {
+    font-size: 9px;
+    color: var(--muted);
+    margin-top: 3px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  /* Shot formula */
+  .formula {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 4px 4px 0;
+    padding: 10px 14px;
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+  .formula b { color: var(--accent); }
+  .formula .result {
+    color: var(--accent3);
+    font-size: 11px;
+  }
+
+  /* Divider */
+  .divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 18px 0;
+  }
+
+  /* Don't shoot box */
+  .dont-box {
+    background: rgba(255,71,87,0.05);
+    border: 1px solid rgba(255,71,87,0.2);
+    border-radius: 4px;
+    padding: 10px 14px;
+  }
+  .dont-box li::before { color: var(--accent2); content: '✕'; }
+
+  /* Footer */
+  .footer {
+    margin-top: 22px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .footer-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent));
+  }
+  .footer-text {
+    font-family: var(--mono);
+    font-size: 8px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-align: right;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+
+  <div class="topbar">
+    <div class="topbar-dot"></div>
+    <div class="topbar-tag">Field Collection Protocol</div>
+    <div class="topbar-line"></div>
+    <div class="topbar-tag">v1.0</div>
+  </div>
+
+  <div class="header">
+    <div class="header-label">Dataset Guide //</div>
+    <div class="header-title">Mos<span>Kita</span></div>
+    <div class="header-sub">YOLOv8 · Self-Curated · Metro Manila</div>
+  </div>
+
+  <!-- OBJECTS -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">01</div>
+      <div class="section-title">Target Objects</div>
+      <div class="section-line"></div>
+    </div>
+    <div class="class-grid">
+      <ul>
+        <li><b>Plastic drum</b> <span class="tag tag-red">PRIORITY</span></li>
+        <li><b>Metal drum / barrel</b> <span class="tag tag-red">PRIORITY</span></li>
+        <li><b>Discarded tire</b> <span class="tag tag-red">PRIORITY</span></li>
+        <li><b>Flower pot + saucer</b> <span class="tag tag-yellow">HIGH</span></li>
+        <li><b>Tarpaulin pool</b> <span class="tag tag-yellow">HIGH</span></li>
+        <li><b>Uncovered water container</b> <span class="tag tag-yellow">HIGH</span></li>
+      </ul>
+      <ul>
+        <li><b>Bamboo stump</b> <span class="tag tag-yellow">HIGH</span></li>
+        <li><b>Coconut shell</b> <span class="tag tag-cyan">MED</span></li>
+        <li><b>CHB / hollow block</b> <span class="tag tag-cyan">MED</span></li>
+        <li><b>Clogged gutter</b> <span class="tag tag-cyan">MED</span></li>
+        <li><b>Tin / plastic cans</b> <span class="tag tag-cyan">MED</span></li>
+        <li><b>Cemetery vases</b> <span class="tag tag-cyan">MED</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- SHOT COUNT -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">02</div>
+      <div class="section-title">Shots Per Object</div>
+      <div class="section-line"></div>
+    </div>
+    <div class="matrix">
+      <div class="matrix-cell">
+        <div class="m-val">3</div>
+        <div class="m-label">Distances</div>
+      </div>
+      <div class="matrix-cell">
+        <div class="m-val">3</div>
+        <div class="m-label">Angles</div>
+      </div>
+      <div class="matrix-cell">
+        <div class="m-val">2</div>
+        <div class="m-label">Lighting</div>
+      </div>
+      <div class="matrix-cell">
+        <div class="m-val">2</div>
+        <div class="m-label">Wet / Dry</div>
+      </div>
+      <div class="matrix-cell">
+        <div class="m-val">2</div>
+        <div class="m-label">Context</div>
+      </div>
+      <div class="matrix-cell" style="background: rgba(0,229,255,0.06); border-color: rgba(0,229,255,0.25);">
+        <div class="m-val" style="color:#ffd32a">≥5</div>
+        <div class="m-label" style="color:var(--accent3)">Min / Object</div>
+      </div>
+    </div>
+    <div class="formula">
+      <b>3</b> dist × <b>3</b> angle × <b>2</b> light × <b>2</b> state = <b>~72</b> raw per class<br>
+      After Roboflow augmentation → <span class="result">~600 effective samples</span>
+    </div>
+  </div>
+
+  <!-- DISTANCE -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">03</div>
+      <div class="section-title">Distance Guide</div>
+      <div class="section-line"></div>
+    </div>
+    <ul>
+      <li><b>Close (1–1.5m)</b> — object fills 60–80% frame · shows water, texture, material · 20% of shots</li>
+      <li><b>Medium (2–4m)</b> — object fills 30–50% frame · natural context visible · <b>50% of shots ← MAIN</b></li>
+      <li><b>Far (5–10m)</b> — object fills 10–25% frame · multiple objects per frame · 30% of shots</li>
+    </ul>
+  </div>
+
+  <!-- ANGLES -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">04</div>
+      <div class="section-title">Angle Guide</div>
+      <div class="section-line"></div>
+    </div>
+    <ul>
+      <li><b>Eye-level (0°)</b> — drums, tires, barrels, any tall container</li>
+      <li><b>Diagonal (45°) ★</b> — most shots, most natural human perspective</li>
+      <li><b>Top-down (90°)</b> — buckets, pots, saucers, coconut shells, anything open-top</li>
+    </ul>
+  </div>
+
+  <!-- LIGHTING -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">05</div>
+      <div class="section-title">Lighting Conditions</div>
+      <div class="section-line"></div>
+    </div>
+    <ul>
+      <li><b>Overcast / cloudy</b> — even light, no harsh shadow · shoot baseline here first</li>
+      <li><b>Bright sunlight</b> — common in PH · must be represented in dataset</li>
+      <li><b>Under shade / tree</b> — mosquitoes prefer shade · critical context</li>
+    </ul>
+  </div>
+
+  <!-- LOCATIONS -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">06</div>
+      <div class="section-title">Shoot Locations</div>
+      <div class="section-line"></div>
+    </div>
+    <ul>
+      <li><b>Residential barangay</b> — primary real-world deployment context</li>
+      <li><b>Vacant lots / construction sites</b> — tires, blocks, tarps · high density</li>
+      <li><b>Cemetery</b> — flower vases · extremely productive breeding sites</li>
+      <li><b>Market / palengke backyard</b> — drums, open containers, waste</li>
+      <li><b>TIP Manila campus</b> — accessible · easy permission</li>
+    </ul>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- DON'T SHOOT -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">07</div>
+      <div class="section-title">Never Do This</div>
+      <div class="section-line"></div>
+    </div>
+    <div class="dont-box">
+      <ul>
+        <li>Same angle + distance for every shot</li>
+        <li>Only isolated objects on clean backgrounds</li>
+        <li>Only dry conditions — must shoot water-present too</li>
+        <li>Always center the object perfectly in frame</li>
+        <li>Same location every session — model will overfit</li>
+        <li>Zoom — move your body closer instead</li>
+        <li>Flash, filters, portrait mode, or HDR</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- QUICK CHECKLIST -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-num">08</div>
+      <div class="section-title">5-Shot Checklist Per Object</div>
+      <div class="section-line"></div>
+    </div>
+    <ul>
+      <li><b>Shot 1</b> — Medium · eye-level · natural</li>
+      <li><b>Shot 2</b> — Medium · 45° diagonal</li>
+      <li><b>Shot 3</b> — Close · top-down · show inside</li>
+      <li><b>Shot 4</b> — Far · show full scene + surroundings</li>
+      <li><b>Shot 5</b> — Repeat Shot 1 under different light</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    <div class="footer-line"></div>
+    <div class="footer-text">MosKita · COE 005A · TIP Manila · K1taru</div>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,84 @@
+# .gitignore — AI model project
+# Environment
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# IDEs / editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Logs / runtime
+*.log
+logs/
+tmp/
+temp/
+*.out
+*.err
+
+# Jupyter
+.ipynb_checkpoints
+
+# Model artifacts, weights and checkpoints
+checkpoints/
+checkpoint/
+models/
+weights/
+results/
+runs/
+wandb/
+mlruns/
+outputs/
+*.ckpt
+*.ckpt.index
+*.pt
+*.pth
+*.safetensors
+*.bin
+*.h5
+*.onnx
+*.pb
+*.tflite
+
+# Data and caches
+data/
+datasets/
+raw_data/
+processed_data/
+cache/
+.cache/
+pip-wheel-metadata/
+*.sqlite3
+*.db
+
+# HuggingFace / transformer caches
+.cache/huggingface/
+transformers_cache/
+huggingface_hub/
+
+# Test / coverage
+.pytest_cache/
+coverage/
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
