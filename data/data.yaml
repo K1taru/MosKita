@@ -1,0 +1,18 @@
+# MosKita — YOLOv8 Dataset Config
+path: ./data/annotated
+train: train/images
+val: val/images
+test: test/images
+
+nc: 10  # number of classes (Phase 1)
+names:
+  0: plastic_drum_open
+  1: plastic_drum_covered
+  2: metal_drum_open
+  3: discarded_tire_pooled
+  4: discarded_tire_dry
+  5: flower_pot_saucer_wet
+  6: flower_pot_saucer_dry
+  7: tarpaulin_pooled
+  8: uncovered_container_wet
+  9: uncovered_container_dry
