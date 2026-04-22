@@ -1,0 +1,1 @@
+discarded_tire,flower_pot,uncovered_container,drain_inlet,stagnant_puddle,plastic_drum,bucket,styrofoam_container

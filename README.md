@@ -12,9 +12,9 @@ MosKita identifies *Aedes aegypti* and *Aedes albopictus* breeding containers fr
 
 ### Key Features
 - **YOLOv8s object detection** — tight bounding boxes around breeding containers with confidence scores
-- **10-class detection schema** — plastic drums, tires, flower pots, tarps, water containers (wet/dry states)
+- **8-class detection schema** — plastic drum, tire, flower pot, bucket, uncovered container, drain inlet, stagnant puddle, styrofoam container
 - **ONNX/TFLite export** — optimized for Pi 5 inference (<500ms/frame)
-- **High-risk classification** — flags containers most likely to harbor dengue vectors
+- **Breeding site identification** — any detected object is flagged as a potential breeding site by definition
 - **Field-ready taxonomy** — 8 categories of WHO-recognized breeding sites (household, natural, construction, cemetery, etc.)
 
 ---
@@ -40,8 +40,9 @@ MosKita identifies *Aedes aegypti* and *Aedes albopictus* breeding containers fr
 - **Distances**: Close (1–1.5m), medium (2–4m), far (5–10m)
 - **Angles**: Eye-level, diagonal (45°), top-down
 - **Lighting**: Overcast, bright sun, shade
-- **Water state**: Wet, dry
 - **Context**: Isolated, cluttered scenes
+
+> Shoot the object in whatever state you find it — wet, dry, empty, full. Detection = breeding site. Water state is not annotated.
 
 ---
 
@@ -56,9 +57,9 @@ moskita/
 │   ├── runs/                   # training checkpoints & plots
 │   └── exports/                # moskita.onnx, moskita.tflite
 ├── notebooks/
-│   ├── 01_eda.ipynb
-│   ├── 02_training.ipynb
-│   └── 03_evaluation.ipynb
+│   ├── eda.ipynb
+│   ├── training.ipynb
+│   └── evaluation.ipynb
 ├── deploy/
 │   ├── pi_inference.py         # Pi 5 live inference
 │   └── requirements_pi.txt

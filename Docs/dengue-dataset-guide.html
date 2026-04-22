@@ -308,18 +308,21 @@
         <li><b>Plastic drum</b> <span class="tag tag-red">PRIORITY</span></li>
         <li><b>Metal drum / barrel</b> <span class="tag tag-red">PRIORITY</span></li>
         <li><b>Discarded tire</b> <span class="tag tag-red">PRIORITY</span></li>
-        <li><b>Flower pot + saucer</b> <span class="tag tag-yellow">HIGH</span></li>
+        <li><b>Flower pot / saucer</b> <span class="tag tag-yellow">HIGH</span></li>
         <li><b>Tarpaulin pool</b> <span class="tag tag-yellow">HIGH</span></li>
-        <li><b>Uncovered water container</b> <span class="tag tag-yellow">HIGH</span></li>
+        <li><b>Uncovered container</b> <span class="tag tag-yellow">HIGH</span></li>
       </ul>
       <ul>
+        <li><b>Bucket</b> <span class="tag tag-yellow">HIGH</span></li>
+        <li><b>Styrofoam container</b> <span class="tag tag-yellow">HIGH</span></li>
         <li><b>Bamboo stump</b> <span class="tag tag-yellow">HIGH</span></li>
         <li><b>Coconut shell</b> <span class="tag tag-cyan">MED</span></li>
-        <li><b>CHB / hollow block</b> <span class="tag tag-cyan">MED</span></li>
-        <li><b>Clogged gutter</b> <span class="tag tag-cyan">MED</span></li>
-        <li><b>Tin / plastic cans</b> <span class="tag tag-cyan">MED</span></li>
-        <li><b>Cemetery vases</b> <span class="tag tag-cyan">MED</span></li>
+        <li><b>Clogged gutter / drain</b> <span class="tag tag-cyan">MED</span></li>
+        <li><b>Cemetery vase</b> <span class="tag tag-cyan">MED</span></li>
       </ul>
+    </div>
+    <div style="margin-top:10px; font-family:var(--mono); font-size:9px; color:var(--muted); border-left:2px solid var(--accent); padding-left:10px;">
+      Any detected object = potential breeding site &mdash; water state is not annotated.
     </div>
   </div>
 
@@ -345,20 +348,17 @@
       </div>
       <div class="matrix-cell">
         <div class="m-val">2</div>
-        <div class="m-label">Wet / Dry</div>
-      </div>
-      <div class="matrix-cell">
-        <div class="m-val">2</div>
         <div class="m-label">Context</div>
       </div>
       <div class="matrix-cell" style="background: rgba(0,229,255,0.06); border-color: rgba(0,229,255,0.25);">
-        <div class="m-val" style="color:#ffd32a">≥5</div>
+        <div class="m-val" style="color:#ffd32a">≥3</div>
         <div class="m-label" style="color:var(--accent3)">Min / Object</div>
       </div>
     </div>
     <div class="formula">
-      <b>3</b> dist × <b>3</b> angle × <b>2</b> light × <b>2</b> state = <b>~72</b> raw per class<br>
-      After Roboflow augmentation → <span class="result">~600 effective samples</span>
+      <b>3</b> dist × <b>3</b> angle × <b>2</b> light × <b>2</b> context = <b>~36</b> raw per class<br>
+      After Roboflow augmentation → <span class="result">≈300+ effective samples</span><br>
+      <span style="color:var(--muted)">Shoot wet, dry, empty, full — all states are valid detections.</span>
     </div>
   </div>
 
@@ -433,7 +433,6 @@
       <ul>
         <li>Same angle + distance for every shot</li>
         <li>Only isolated objects on clean backgrounds</li>
-        <li>Only dry conditions — must shoot water-present too</li>
         <li>Always center the object perfectly in frame</li>
         <li>Same location every session — model will overfit</li>
         <li>Zoom — move your body closer instead</li>

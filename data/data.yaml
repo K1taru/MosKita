@@ -4,15 +4,15 @@ train: train/images
 val: val/images
 test: test/images
 
-nc: 10  # number of classes (Phase 1)
+nc: 8  # number of classes (V1)
+# Detection philosophy: any detected object is a breeding site.
+# Class names identify object type only — no water-state suffix.
 names:
-  0: plastic_drum_open
-  1: plastic_drum_covered
-  2: metal_drum_open
-  3: discarded_tire_pooled
-  4: discarded_tire_dry
-  5: flower_pot_saucer_wet
-  6: flower_pot_saucer_dry
-  7: tarpaulin_pooled
-  8: uncovered_container_wet
-  9: uncovered_container_dry
+  0: discarded_tire
+  1: flower_pot
+  2: uncovered_container
+  3: drain_inlet
+  4: stagnant_puddle
+  5: plastic_drum
+  6: bucket
+  7: styrofoam_container

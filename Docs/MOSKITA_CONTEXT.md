@@ -64,31 +64,32 @@ The end goal is **edge deployment on a Raspberry Pi 5** with a camera module for
 
 ## 5. Detection Classes
 
-Two-part label schema: `{container_type}_{water_status}`
+**Detection philosophy:** If the object is detected, it is flagged as a potential breeding site. The model's job is to identify *what the object is* — not to assess water presence. Water-state is not part of any class name.
 
-### Priority Classes (Phase 1 — start here)
+Label schema: `{object_type}` only.
+
+### V1 Classes (train now — fully supported by available data)
 ```
-plastic_drum_open
-plastic_drum_covered
-metal_drum_open
-discarded_tire_pooled
-discarded_tire_dry
-flower_pot_saucer_wet
-flower_pot_saucer_dry
-tarpaulin_pooled
-uncovered_water_container_wet
-uncovered_water_container_dry
+discarded_tire
+flower_pot
+uncovered_container
+drain_inlet
+stagnant_puddle
+plastic_drum
+bucket
+styrofoam_container
 ```
 
-### Extended Classes (Phase 2)
+### Extended Classes (Phase 2 — collect local data first)
 ```
-bamboo_stump_open
-coconut_shell_pooled
-construction_block_pooled
+metal_drum
+tarpaulin
+bamboo_stump
+coconut_shell
+construction_block
 clogged_gutter
-tin_can_pooled
-cemetery_vase_wet
-cemetery_vase_dry
+tin_can
+cemetery_vase
 ```
 
 ---
@@ -115,14 +116,15 @@ cemetery_vase_dry
 | Distance | Close (1–1.5m), Medium (2–4m), Far (5–10m) | 3 |
 | Angle | Eye-level (0°), Diagonal (45°), Top-down (90°) | 3 |
 | Lighting | Overcast, Bright sun, Shade | 2 |
-| Water state | Wet (water visible), Dry | 2 |
 | Context | Isolated, Cluttered scene | 2 |
 
-**Formula:** 3×3×2×2×2 = **~72 raw shots per class** minimum
-**After Roboflow augmentation:** ~600 effective samples per class
+**Formula:** 3×3×2×2 = **~36 raw shots per class** minimum
+**After Roboflow augmentation:** ~300+ effective samples per class
+
+> Water state is intentionally not a variation axis. Shoot the object in whatever condition you find it — wet, dry, empty, full. All states are valid detections.
 
 ### Shot Distribution Per Class (per 100 images)
-- Close (1–1.5m): 20 shots — detail, water state, material
+- Close (1–1.5m): 20 shots — detail, texture, material
 - Medium (2–4m): 50 shots — **primary generalization distance**
 - Far/scene (5–10m): 30 shots — multi-object, real deployment context
 
@@ -303,9 +305,9 @@ moskita/
 │       └── moskita.tflite
 │
 ├── notebooks/
-│   ├── 01_eda.ipynb                # dataset exploration
-│   ├── 02_training.ipynb           # training runs
-│   └── 03_evaluation.ipynb        # mAP, confusion matrix, per-class analysis
+│   ├── eda.ipynb                   # dataset exploration
+│   ├── training.ipynb              # training runs
+│   └── evaluation.ipynb           # mAP, confusion matrix, per-class analysis
 │
 ├── deploy/
 │   ├── pi_inference.py             # runs on Raspberry Pi 5
