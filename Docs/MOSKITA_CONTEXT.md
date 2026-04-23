@@ -96,12 +96,44 @@ cemetery_vase
 
 ## 6. Dataset Specification
 
-### Volume Targets
-| Phase | Images/Class | Classes | Total Images | Goal |
-|---|---|---|---|---|
-| Phase 1 (PoC) | 80–150 | 5 | ~500 | Validate concept |
-| Phase 2 (Demo) | 200–300 | 10 | ~2,500 | Thesis/paper submission |
-| Phase 3 (Deploy) | 500+ | 10–15 | ~6,000+ | Real-world use |
+### Available Dataset Inventory (as of 2026-04-23)
+
+#### Outsource Datasets (annotated, ready to remap)
+
+| Source | Format | Images | Annotations | V1 Class Mapping | License |
+|---|---|---:|---:|---|---|
+| **Adnans — Breeding Place Detection** | YOLO detection + polygon | 4,425 | 4,895 | Bottle → `uncovered_container`; Coconut-Exocarp → `uncovered_container`; Drain-Inlet → `drain_inlet`; Tire → `discarded_tire`; Vase → `flower_pot` | CC BY 4.0 |
+| **Faiyaz — MosquitoFusion Dataset** | YOLO detection + polygon | 1,047 | 1,454 | Breeding Place → `uncovered_container` (Mosquito / Mosquito Swarm removed) | CC BY 4.0 |
+| **Roboflow — Public Breeding Sites** | YOLO detection | 288 | 124 | bucket → `bucket`; puddle → `stagnant_puddle`; tire → `discarded_tire` | CC BY 4.0 |
+| **Subtotal outsource** | | **5,760** | **6,473** | | |
+
+> **Not available:** Adnans Water Surface Segmentation directory is not present on disk and is excluded from all assembly commands.
+
+#### Local Self-Collected Images (raw, unannotated — awaiting Roboflow annotation)
+
+| Batch label | Images | Maps to V1 class | Status |
+|---|---:|---|---|
+| `moskita_plastic_drum_*` | 107 | `plastic_drum` | Resized ✅ — pending annotation |
+| `moskita_bucket_*` | 181 | `bucket` | Resized ✅ — pending annotation *(merged from bucket + small_bucket + styrofoam_container)* |
+| `moskita_flower_pot_*` | 76 | `flower_pot` | Resized ✅ — pending annotation |
+| `moskita_basin_*` | 31 | mixed (multi-class) | Resized ✅ — pending annotation |
+| `moskita_multi_class_*` | 8 | mixed | Resized ✅ — pending annotation |
+| **Subtotal local raw** | **403** | | |
+
+> All local images have been resized to 1280×1280 by `utils/image_resizer.py`. Originals kept in their source folder. Upload to Roboflow for annotation before assembly.
+
+#### V1 Class Coverage Summary
+
+| ID | Class | Annotated instances | Local raw (unannotated) | Status |
+|---|---|---:|---:|---|
+| 0 | `discarded_tire` | ~1,212 (Adnans 1,151 + RF 61) | 0 | ✅ Good |
+| 1 | `flower_pot` | ~1,518 (Adnans Vase) | 76 | ✅ Good |
+| 2 | `uncovered_container` | ~3,451 (Adnans Bottle + Coconut-Exocarp + Faiyaz) | 0 | ✅ Strong |
+| 3 | `drain_inlet` | ~230 (Adnans) | 0 | ⚠️ Moderate — collect more |
+| 4 | `stagnant_puddle` | ~56 (Roboflow) | 0 | ❌ Low — collect more |
+| 5 | `plastic_drum` | 0 | 107 | ❌ Annotate local raw first |
+| 6 | `bucket` | ~115 (Roboflow) | 126 | ❌ Annotate local raw first |
+| 7 | `styrofoam_container` | 0 | 55 | ❌ Annotate local raw first |
 
 ### Dataset Split
 ```
@@ -275,58 +307,73 @@ Deployment Pipeline (Pi 5):
 
 ---
 
-## 11. Recommended Project Structure
+## 11. Actual Project Structure
 
 ```
-moskita/
+MosKita/
 │
 ├── data/
-│   ├── raw/                        # original unedited photos
-│   │   ├── plastic_drum_open/
-│   │   ├── discarded_tire_pooled/
-│   │   └── ...
-│   ├── annotated/                  # Roboflow YOLOv8 export
-│   │   ├── train/
-│   │   │   ├── images/
-│   │   │   └── labels/
-│   │   ├── val/
-│   │   │   ├── images/
-│   │   │   └── labels/
-│   │   └── test/
-│   │       ├── images/
-│   │       └── labels/
-│   ├── data.yaml                   # YOLOv8 dataset config
-│   └── collection_log.csv          # date, collector, location, class, count
+│   ├── raw/                            # local photos, resized to 1280×1280
+│   │   ├── moskita_plastic_drum_*.jpg  # 107 images
+│   │   ├── moskita_bucket_*.jpg        # 84 images
+│   │   ├── moskita_flower_pot_*.jpg    # 76 images
+│   │   ├── moskita_bucket_*.jpg        # 181 images  (merged from bucket + small_bucket + styrofoam_container)
+│   │   ├── moskita_styrofoam_*.jpg     # 55 images
+│   │   ├── moskita_batch_*.jpg         # 31 images (mixed)
+│   │   ├── moskita_multi_class_*.jpg   # 8 images  (mixed)
+│   │   └── logs/
+│   │       └── conversion_log.csv
+│   ├── annotated/
+│   │   ├── outsource/
+│   │   │   ├── adnans/
+│   │   │   │   └── Breeding Place Detection/   # 4,425 imgs, CC BY 4.0
+│   │   │   ├── faiyazabdullah/
+│   │   │   │   └── MosquitoFusion Dataset/     # 1,047 imgs, CC BY 4.0 (Mosquito/Swarm removed)
+│   │   │   └── roboflow/                       # 288 imgs,  CC BY 4.0
+│   │   ├── train/                          #
+│   │   ├── val/                            # ← assembled by training.ipynb §3
+│   │   └── test/                           #   via remap_yolo_dataset.py
+│   └── data.yaml                       # V1 8-class dataset config
 │
 ├── models/
-│   ├── runs/                       # YOLO training outputs (weights, plots)
+│   ├── runs/                           # YOLO training outputs (weights, plots)
 │   └── exports/
-│       ├── moskita.onnx            # for Pi 5 deployment
+│       ├── moskita.onnx                # Pi 5 deployment
 │       └── moskita.tflite
 │
 ├── notebooks/
-│   ├── eda.ipynb                   # dataset exploration
-│   ├── training.ipynb              # training runs
-│   └── evaluation.ipynb           # mAP, confusion matrix, per-class analysis
+│   ├── training.ipynb              # dataset assembly + training + metrics
+│   └── evaluation.ipynb            # mAP, confusion matrix, per-class analysis
 │
 ├── deploy/
 │   ├── pi_inference.py             # runs on Raspberry Pi 5
-│   └── requirements_pi.txt         # lightweight deps for Pi
+│   └── requirements_pi.txt
 │
 ├── scripts/
-│   ├── split_dataset.py            # 70/20/10 split
-│   └── check_annotations.py        # validate all labels present
+│   ├── remap_yolo_dataset.py       # merge + remap outsource datasets → V1
+│   └── class_maps/
+│       ├── v1_target_names.txt
+│       ├── adnans_breeding_to_v1.json
+│       ├── faiyaz_mosquitofusion_to_v1.json
+│       └── roboflow_to_v1.json
+│
+├── utils/
+│   └── image_resizer.py            # resize raw photos to 1280×1280, adds moskita_ prefix
 │
 ├── assets/
-│   └── sample_detections/          # output images with bounding boxes
+│   └── sample_detections/
 │
-├── MOSKITA_CONTEXT.md              # ← this file
-└── README.md
+└── Docs/
+    ├── MOSKITA_CONTEXT.md
+    ├── dengue-dataset-guide.html
+    └── temp/
+        ├── ANNOTATION_REMAP_HOWTO.md
+        └── DATASET_LABEL_RECOMMENDATIONS.md
 ```
 
 ---
 
-## 12. data.yaml Template
+## 12. data.yaml (current V1)
 
 ```yaml
 # MosKita — YOLOv8 Dataset Config
@@ -335,18 +382,18 @@ train: train/images
 val: val/images
 test: test/images
 
-nc: 10  # number of classes (Phase 1)
+nc: 8  # number of classes (V1)
+# Detection philosophy: any detected object is a breeding site.
+# Class names identify object type only — no water-state suffix.
 names:
-  0: plastic_drum_open
-  1: plastic_drum_covered
-  2: metal_drum_open
-  3: discarded_tire_pooled
-  4: discarded_tire_dry
-  5: flower_pot_saucer_wet
-  6: flower_pot_saucer_dry
-  7: tarpaulin_pooled
-  8: uncovered_container_wet
-  9: uncovered_container_dry
+  0: discarded_tire
+  1: flower_pot
+  2: uncovered_container
+  3: drain_inlet
+  4: stagnant_puddle
+  5: plastic_drum
+  6: bucket
+  7: styrofoam_container
 ```
 
 ---
@@ -356,6 +403,7 @@ names:
 ```python
 # train.py — MosKita YOLOv8 Training
 # Hardware: RTX 2060 6GB | Batch 16 | YOLOv8s
+# See notebooks/training.ipynb for the full workflow with dataset assembly.
 
 from ultralytics import YOLO
 
@@ -373,7 +421,6 @@ results = model.train(
     lr0=0.001,
     lrf=0.01,
     weight_decay=0.0005,
-    augment=True,
     cache=False,       # set True if RAM allows
     device=0,          # GPU 0 (RTX 2060)
     verbose=True,
@@ -394,17 +441,17 @@ from ultralytics import YOLO
 model = YOLO('models/exports/moskita.onnx', task='detect')
 
 CLASS_NAMES = [
-    'plastic_drum_open', 'plastic_drum_covered', 'metal_drum_open',
-    'discarded_tire_pooled', 'discarded_tire_dry',
-    'flower_pot_saucer_wet', 'flower_pot_saucer_dry',
-    'tarpaulin_pooled', 'uncovered_container_wet', 'uncovered_container_dry',
+    'discarded_tire',
+    'flower_pot',
+    'uncovered_container',
+    'drain_inlet',
+    'stagnant_puddle',
+    'plastic_drum',
+    'bucket',
+    'styrofoam_container',
 ]
 
-HIGH_RISK = {
-    'plastic_drum_open', 'metal_drum_open', 'discarded_tire_pooled',
-    'flower_pot_saucer_wet', 'tarpaulin_pooled', 'uncovered_container_wet'
-}
-
+# All detected objects are potential breeding sites.
 cap = cv2.VideoCapture(0)
 
 while True:
@@ -416,15 +463,12 @@ while True:
 
     for r in results:
         for box in r.boxes:
-            cls = CLASS_NAMES[int(box.cls)]
+            cls  = CLASS_NAMES[int(box.cls)]
             conf = float(box.conf)
-            risk = "HIGH RISK" if cls in HIGH_RISK else "MONITOR"
-            color = (0, 0, 255) if risk == "HIGH RISK" else (0, 165, 255)
-
             x1, y1, x2, y2 = map(int, box.xyxy[0])
-            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
-            cv2.putText(frame, f"{cls} [{risk}] {conf:.2f}",
-                        (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.45, color, 1)
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 200, 100), 2)
+            cv2.putText(frame, f"{cls} {conf:.2f}",
+                        (x1, y1 - 8), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 200, 100), 1)
 
     cv2.imshow('MosKita — Live Detection', frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):

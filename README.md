@@ -30,8 +30,37 @@ MosKita identifies *Aedes aegypti* and *Aedes albopictus* breeding containers fr
 
 ## Dataset & Training
 
-- **Phase 1 target**: 500 images across 5–10 classes (80–150 per class)
+### Available Data (V1)
+
+| Source | Type | Images | Annotations | Classes → V1 | License |
+|---|---|---:|---:|---|---|
+| **Adnans Breeding Place** | Outsource (Roboflow) | 4,425 | 4,895 | Bottle, Coconut-Exocarp → `uncovered_container`; Tire → `discarded_tire`; Drain-Inlet → `drain_inlet`; Vase → `flower_pot` | CC BY 4.0 |
+| **Faiyaz MosquitoFusion** | Outsource (Roboflow) | 1,047 | 1,454 | Breeding Place → `uncovered_container` (Mosquito / Swarm removed) | CC BY 4.0 |
+| **Roboflow Public** | Outsource (Roboflow) | 288 | 124 | bucket → `bucket`; puddle → `stagnant_puddle`; tire → `discarded_tire` | CC BY 4.0 |
+| **Local — plastic_drum** | Self-collected (raw) | 107 | TBD | → `plastic_drum` | Own |
+| **Local — bucket** | Self-collected (raw) | 84 + 42 | TBD | → `bucket` | Own |
+| **Local — flower_pot** | Self-collected (raw) | 76 | TBD | → `flower_pot` | Own |
+| **Local — styrofoam_container** | Self-collected (raw) | 55 | TBD | → `styrofoam_container` | Own |
+| **Local — batch / multi_class** | Self-collected (raw) | 31 + 8 | TBD | mixed classes | Own |
+| **Total** | | **~6,163** | **~6,473+** | — | — |
+
+> Raw local images are resized to 1280×1280 via `utils/image_resizer.py` and await annotation in Roboflow.
+
+### Class Coverage Status
+
+| Class | Annotated | Gap |
+|---|---|---|
+| `discarded_tire` | ~1,212 (outsource) | ✅ Good |
+| `flower_pot` | ~1,518 (outsource) | ✅ Good |
+| `uncovered_container` | ~3,451 (outsource) | ✅ Strong |
+| `drain_inlet` | ~230 (outsource) | ⚠️ Moderate — collect more |
+| `stagnant_puddle` | ~56 (outsource) | ❌ Low — collect more |
+| `plastic_drum` | 0 | ❌ Annotate 107 local raw imgs |
+| `bucket` | ~7 (outsource) | ❌ Annotate 126 local raw imgs |
+| `styrofoam_container` | 0 | ❌ Annotate 55 local raw imgs |
+
 - **Annotation**: Roboflow (YOLOv8 format)
+- **Assembly**: `training.ipynb` Section 3 — toggle sources and rebuild via `scripts/remap_yolo_dataset.py`
 - **Augmentation**: Horizontal flip, rotation, brightness, blur, mosaic
 - **Split**: 70% train / 20% val / 10% test
 - **Epochs**: 50–100 (early stopping at patience=15)
@@ -49,25 +78,38 @@ MosKita identifies *Aedes aegypti* and *Aedes albopictus* breeding containers fr
 ## Project Structure
 
 ```
-moskita/
+MosKita/
 ├── data/
-│   ├── raw/                    # unedited field photos
-│   └── annotated/              # YOLOv8 train/val/test splits
+│   ├── raw/                          # local photos, resized to 1280×1280 (moskita_*.jpg)
+│   │   └── logs/                     # conversion_log.csv
+│   ├── annotated/
+│   │   ├── outsource/
+│   │   │   ├── adnans/
+│   │   │   │   └── Breeding Place Detection/  # 4,425 imgs — CC BY 4.0
+│   │   │   ├── faiyazabdullah/
+│   │   │   │   └── MosquitoFusion Dataset/    # 1,047 imgs — CC BY 4.0
+│   │   │   └── roboflow/                      # 288 imgs  — CC BY 4.0
+│   │   ├── train/ val/ test/          # assembled by training.ipynb §3
+│   └── data.yaml
 ├── models/
-│   ├── runs/                   # training checkpoints & plots
-│   └── exports/                # moskita.onnx, moskita.tflite
+│   ├── runs/                          # YOLOv8 training outputs
+│   └── exports/                       # moskita.onnx, moskita.tflite
 ├── notebooks/
-│   ├── eda.ipynb
-│   ├── training.ipynb
+│   ├── training.ipynb                 # main training + assembly
 │   └── evaluation.ipynb
 ├── deploy/
-│   ├── pi_inference.py         # Pi 5 live inference
-│   └── requirements_pi.txt
+│   └── pi_inference.py
 ├── scripts/
-│   ├── split_dataset.py
-│   └── check_annotations.py
+│   ├── remap_yolo_dataset.py          # merge & remap outsource datasets
+│   └── class_maps/                    # JSON maps + v1_target_names.txt
+├── utils/
+│   └── image_resizer.py               # resize raw photos to 1280×1280
+├── assets/
+│   └── sample_detections/
 └── Docs/
-    └── MOSKITA_CONTEXT.md      # full project spec
+    ├── MOSKITA_CONTEXT.md
+    ├── dengue-dataset-guide.html
+    └── temp/                          # working notes
 ```
 
 ---
@@ -112,15 +154,20 @@ python deploy/pi_inference.py
 
 ---
 
-## Detection Classes (Phase 1)
+## V1 Detection Classes (8 classes)
 
 ```
-plastic_drum_open, plastic_drum_covered, metal_drum_open,
-discarded_tire_pooled, discarded_tire_dry,
-flower_pot_saucer_wet, flower_pot_saucer_dry,
-tarpaulin_pooled,
-uncovered_container_wet, uncovered_container_dry
+0: discarded_tire
+1: flower_pot
+2: uncovered_container
+3: drain_inlet
+4: stagnant_puddle
+5: plastic_drum
+6: bucket
+7: styrofoam_container
 ```
+
+> Any detected object is a potential breeding site. Water-state is not part of any class name.
 
 ---
 
