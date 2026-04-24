@@ -1,1 +1,1 @@
-discarded_tire,flower_pot,bottle,coconut_shell,basin,breeding_place,drain_inlet,stagnant_puddle,drum,bucket,styrofoam_container
+discarded_tire,flower_pot,bottle,coconut_shell,basin,drain_inlet,drum,bucket,styrofoam_container
