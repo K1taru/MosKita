@@ -75,7 +75,7 @@ flower_pot
 uncovered_container
 drain_inlet
 stagnant_puddle
-plastic_drum
+drum
 bucket
 styrofoam_container
 ```
@@ -96,7 +96,7 @@ cemetery_vase
 
 ## 6. Dataset Specification
 
-### Available Dataset Inventory (as of 2026-04-23)
+### Available Dataset Inventory (as of 2026-04-24)
 
 #### Outsource Datasets (annotated, ready to remap)
 
@@ -104,36 +104,44 @@ cemetery_vase
 |---|---|---:|---:|---|---|
 | **Adnans — Breeding Place Detection** | YOLO detection + polygon | 4,425 | 4,895 | Bottle → `uncovered_container`; Coconut-Exocarp → `uncovered_container`; Drain-Inlet → `drain_inlet`; Tire → `discarded_tire`; Vase → `flower_pot` | CC BY 4.0 |
 | **Faiyaz — MosquitoFusion Dataset** | YOLO detection + polygon | 1,047 | 1,454 | Breeding Place → `uncovered_container` (Mosquito / Mosquito Swarm removed) | CC BY 4.0 |
-| **Roboflow — Public Breeding Sites** | YOLO detection | 288 | 124 | bucket → `bucket`; puddle → `stagnant_puddle`; tire → `discarded_tire` | CC BY 4.0 |
-| **Subtotal outsource** | | **5,760** | **6,473** | | |
+| **Roboflow — Public Breeding Sites** | YOLO detection | 288 | 409 | bucket → `bucket`; puddle → `stagnant_puddle`; tire → `discarded_tire` | CC BY 4.0 |
+| **Subtotal outsource** | | **5,760** | **6,758** | | |
 
 > **Not available:** Adnans Water Surface Segmentation directory is not present on disk and is excluded from all assembly commands.
 
-#### Local Self-Collected Images (raw, unannotated — awaiting Roboflow annotation)
+#### Local Annotated Export (ready to remap)
 
-| Batch label | Images | Maps to V1 class | Status |
+| Source | Format | Images | Annotations | V1 Class Mapping | License |
+|---|---|---:|---:|---|---|
+| **K1taru — Self-Curated Export** | YOLO detection (Roboflow v1) | 1,245 | 1,725 | basin → `uncovered_container`; bucket → `bucket`; drum → `drum`; plant pot → `flower_pot`; styrofoam container → `styrofoam_container` | Private |
+
+> The `k1taru` export already contains 4× train-only photometric augmentation. Validation and test remain unaugmented.
+
+#### Local Raw Archive (organized source images)
+
+| Folder | Images | Maps to V1 class | Status |
 |---|---:|---|---|
-| `moskita_plastic_drum_*` | 107 | `plastic_drum` | Resized ✅ — pending annotation |
-| `moskita_bucket_*` | 181 | `bucket` | Resized ✅ — pending annotation *(merged from bucket + small_bucket + styrofoam_container)* |
-| `moskita_flower_pot_*` | 76 | `flower_pot` | Resized ✅ — pending annotation |
-| `moskita_basin_*` | 31 | mixed (multi-class) | Resized ✅ — pending annotation |
-| `moskita_multi_class_*` | 8 | mixed | Resized ✅ — pending annotation |
+| `raw/plastic_drum/` | 107 | `drum` | Archived source set |
+| `raw/bucket/` | 181 | `bucket` | Archived source set *(merged from bucket + small_bucket + styrofoam_container)* |
+| `raw/flower_pot/` | 76 | `flower_pot` | Archived source set |
+| `raw/basin/` | 31 | `uncovered_container` | Archived source set |
+| `raw/multi_class/` | 8 | mixed | Archived source set |
 | **Subtotal local raw** | **403** | | |
 
-> All local images have been resized to 1280×1280 by `utils/image_resizer.py`. Originals kept in their source folder. Upload to Roboflow for annotation before assembly.
+> `data/raw/` is the organized source archive. `data/annotated/k1taru/` is the train-ready local dataset and should be used in assembly.
 
 #### V1 Class Coverage Summary
 
-| ID | Class | Annotated instances | Local raw (unannotated) | Status |
-|---|---|---:|---:|---|
-| 0 | `discarded_tire` | ~1,212 (Adnans 1,151 + RF 61) | 0 | ✅ Good |
-| 1 | `flower_pot` | ~1,518 (Adnans Vase) | 76 | ✅ Good |
-| 2 | `uncovered_container` | ~3,451 (Adnans Bottle + Coconut-Exocarp + Faiyaz) | 0 | ✅ Strong |
-| 3 | `drain_inlet` | ~230 (Adnans) | 0 | ⚠️ Moderate — collect more |
-| 4 | `stagnant_puddle` | ~56 (Roboflow) | 0 | ❌ Low — collect more |
-| 5 | `plastic_drum` | 0 | 107 | ❌ Annotate local raw first |
-| 6 | `bucket` | ~115 (Roboflow) | 126 | ❌ Annotate local raw first |
-| 7 | `styrofoam_container` | 0 | 55 | ❌ Annotate local raw first |
+| ID | Class | Annotated instances | Main contributing sources | Status |
+|---|---|---:|---|---|
+| 0 | `discarded_tire` | ~2,018 | Adnans + Roboflow public | ✅ Strong |
+| 1 | `flower_pot` | ~3,068 | Adnans + k1taru plant pot | ✅ Strong |
+| 2 | `uncovered_container` | ~6,148 | Adnans + Faiyaz + k1taru basin remap | ✅ Strong |
+| 3 | `drain_inlet` | ~1,353 | Adnans | ✅ Good |
+| 4 | `stagnant_puddle` | ~145 | Roboflow public only | ⚠️ Low — collect more |
+| 5 | `drum` | 388 | k1taru drum | ✅ Ready |
+| 6 | `bucket` | ~581 | Roboflow public + k1taru bucket | ✅ Ready |
+| 7 | `styrofoam_container` | 185 | k1taru only | ⚠️ Moderate |
 
 ### Dataset Split
 ```
@@ -313,17 +321,16 @@ Deployment Pipeline (Pi 5):
 MosKita/
 │
 ├── data/
-│   ├── raw/                            # local photos, resized to 1280×1280
-│   │   ├── moskita_plastic_drum_*.jpg  # 107 images
-│   │   ├── moskita_bucket_*.jpg        # 84 images
-│   │   ├── moskita_flower_pot_*.jpg    # 76 images
-│   │   ├── moskita_bucket_*.jpg        # 181 images  (merged from bucket + small_bucket + styrofoam_container)
-│   │   ├── moskita_styrofoam_*.jpg     # 55 images
-│   │   ├── moskita_batch_*.jpg         # 31 images (mixed)
-│   │   ├── moskita_multi_class_*.jpg   # 8 images  (mixed)
+│   ├── raw/                            # local photos, resized to 1280×1280, organized by class
+│   │   ├── basin/                      # 31 images
+│   │   ├── bucket/                     # 181 images (merged from bucket + small_bucket + styrofoam_container)
+│   │   ├── plastic_drum/               # 107 images
+│   │   ├── flower_pot/                 # 76 images
+│   │   ├── multi_class/                # 8 images (mixed, to be annotated individually)
 │   │   └── logs/
 │   │       └── conversion_log.csv
 │   ├── annotated/
+│   │   ├── k1taru/                         # 1,245 imgs, private self-curated Roboflow export
 │   │   ├── outsource/
 │   │   │   ├── adnans/
 │   │   │   │   └── Breeding Place Detection/   # 4,425 imgs, CC BY 4.0
@@ -332,8 +339,8 @@ MosKita/
 │   │   │   └── roboflow/                       # 288 imgs,  CC BY 4.0
 │   │   ├── train/                          #
 │   │   ├── val/                            # ← assembled by training.ipynb §3
-│   │   └── test/                           #   via remap_yolo_dataset.py
-│   └── data.yaml                       # V1 8-class dataset config
+│   │   ├── test/                           #   via remap_yolo_dataset.py
+│   │   └── data.yaml                       # assembled V1 dataset config
 │
 ├── models/
 │   ├── runs/                           # YOLO training outputs (weights, plots)
@@ -355,6 +362,7 @@ MosKita/
 │       ├── v1_target_names.txt
 │       ├── adnans_breeding_to_v1.json
 │       ├── faiyaz_mosquitofusion_to_v1.json
+│       ├── k1taru_to_v1.json
 │       └── roboflow_to_v1.json
 │
 ├── utils/
@@ -377,7 +385,7 @@ MosKita/
 
 ```yaml
 # MosKita — YOLOv8 Dataset Config
-path: ./data/annotated
+path: .
 train: train/images
 val: val/images
 test: test/images
@@ -391,7 +399,7 @@ names:
   2: uncovered_container
   3: drain_inlet
   4: stagnant_puddle
-  5: plastic_drum
+  5: drum
   6: bucket
   7: styrofoam_container
 ```
@@ -410,7 +418,7 @@ from ultralytics import YOLO
 model = YOLO('yolov8s.pt')  # load pretrained YOLOv8s
 
 results = model.train(
-    data='data/data.yaml',
+  data='data/annotated/data.yaml',
     epochs=100,
     imgsz=640,
     batch=16,          # fits RTX 2060 6GB
@@ -446,7 +454,7 @@ CLASS_NAMES = [
     'uncovered_container',
     'drain_inlet',
     'stagnant_puddle',
-    'plastic_drum',
+  'drum',
     'bucket',
     'styrofoam_container',
 ]

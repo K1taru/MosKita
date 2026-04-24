@@ -36,28 +36,25 @@ MosKita identifies *Aedes aegypti* and *Aedes albopictus* breeding containers fr
 |---|---|---:|---:|---|---|
 | **Adnans Breeding Place** | Outsource (Roboflow) | 4,425 | 4,895 | Bottle, Coconut-Exocarp → `uncovered_container`; Tire → `discarded_tire`; Drain-Inlet → `drain_inlet`; Vase → `flower_pot` | CC BY 4.0 |
 | **Faiyaz MosquitoFusion** | Outsource (Roboflow) | 1,047 | 1,454 | Breeding Place → `uncovered_container` (Mosquito / Swarm removed) | CC BY 4.0 |
-| **Roboflow Public** | Outsource (Roboflow) | 288 | 124 | bucket → `bucket`; puddle → `stagnant_puddle`; tire → `discarded_tire` | CC BY 4.0 |
-| **Local — plastic_drum** | Self-collected (raw) | 107 | TBD | → `plastic_drum` | Own |
-| **Local — bucket** | Self-collected (raw) | 84 + 42 | TBD | → `bucket` | Own |
-| **Local — flower_pot** | Self-collected (raw) | 76 | TBD | → `flower_pot` | Own |
-| **Local — styrofoam_container** | Self-collected (raw) | 55 | TBD | → `styrofoam_container` | Own |
-| **Local — batch / multi_class** | Self-collected (raw) | 31 + 8 | TBD | mixed classes | Own |
-| **Total** | | **~6,163** | **~6,473+** | — | — |
+| **Roboflow Public** | Outsource (Roboflow) | 288 | 409 | bucket → `bucket`; puddle → `stagnant_puddle`; tire → `discarded_tire` | CC BY 4.0 |
+| **K1taru Self-Curated Export** | Local annotated (Roboflow) | 1,245 | 1,725 | basin → `uncovered_container`; bucket → `bucket`; drum → `drum`; plant pot → `flower_pot`; styrofoam container → `styrofoam_container` | Private |
+| **Local Raw Archive** | Self-collected (organized raw) | 403 | — | source archive used to build `data/annotated/k1taru` | Own |
+| **Train-ready total** | | **7,005** | **8,483** | — | — |
 
-> Raw local images are resized to 1280×1280 via `utils/image_resizer.py` and await annotation in Roboflow.
+> `data/annotated/k1taru/` is the train-ready local source. The 403 images under `data/raw/` are the organized source archive and are not counted again in the train-ready total.
 
 ### Class Coverage Status
 
 | Class | Annotated | Gap |
 |---|---|---|
-| `discarded_tire` | ~1,212 (outsource) | ✅ Good |
-| `flower_pot` | ~1,518 (outsource) | ✅ Good |
-| `uncovered_container` | ~3,451 (outsource) | ✅ Strong |
-| `drain_inlet` | ~230 (outsource) | ⚠️ Moderate — collect more |
-| `stagnant_puddle` | ~56 (outsource) | ❌ Low — collect more |
-| `plastic_drum` | 0 | ❌ Annotate 107 local raw imgs |
-| `bucket` | ~7 (outsource) | ❌ Annotate 126 local raw imgs |
-| `styrofoam_container` | 0 | ❌ Annotate 55 local raw imgs |
+| `discarded_tire` | ~2,018 (outsource only) | ✅ Strong |
+| `flower_pot` | ~3,068 (outsource + k1taru plant pot) | ✅ Strong |
+| `uncovered_container` | ~6,148 (outsource + k1taru basin remap) | ✅ Strong |
+| `drain_inlet` | ~1,353 (outsource only) | ✅ Good |
+| `stagnant_puddle` | ~145 (outsource only) | ⚠️ Low — collect more |
+| `drum` | 388 (k1taru drum) | ✅ Ready |
+| `bucket` | ~581 (roboflow + k1taru bucket) | ✅ Ready |
+| `styrofoam_container` | 185 (k1taru) | ⚠️ Moderate |
 
 - **Annotation**: Roboflow (YOLOv8 format)
 - **Assembly**: `training.ipynb` Section 3 — toggle sources and rebuild via `scripts/remap_yolo_dataset.py`
@@ -83,14 +80,15 @@ MosKita/
 │   ├── raw/                          # local photos, resized to 1280×1280 (moskita_*.jpg)
 │   │   └── logs/                     # conversion_log.csv
 │   ├── annotated/
+│   │   ├── k1taru/                        # 1,245 imgs — private self-curated Roboflow export
 │   │   ├── outsource/
 │   │   │   ├── adnans/
 │   │   │   │   └── Breeding Place Detection/  # 4,425 imgs — CC BY 4.0
 │   │   │   ├── faiyazabdullah/
 │   │   │   │   └── MosquitoFusion Dataset/    # 1,047 imgs — CC BY 4.0
 │   │   │   └── roboflow/                      # 288 imgs  — CC BY 4.0
-│   │   ├── train/ val/ test/          # assembled by training.ipynb §3
-│   └── data.yaml
+│   │   ├── train/ val/ test/               # assembled by training.ipynb §3
+│   │   └── data.yaml                       # assembled V1 dataset config
 ├── models/
 │   ├── runs/                          # YOLOv8 training outputs
 │   └── exports/                       # moskita.onnx, moskita.tflite
@@ -98,7 +96,8 @@ MosKita/
 │   ├── training.ipynb                 # main training + assembly
 │   └── evaluation.ipynb
 ├── deploy/
-│   └── pi_inference.py
+│   ├── pi_inference.py
+│   └── webapp/                        # React browser inference dashboard
 ├── scripts/
 │   ├── remap_yolo_dataset.py          # merge & remap outsource datasets
 │   └── class_maps/                    # JSON maps + v1_target_names.txt
@@ -124,7 +123,7 @@ python -c "
 from ultralytics import YOLO
 model = YOLO('yolov8s.pt')
 results = model.train(
-    data='data/data.yaml',
+    data='data/annotated/data.yaml',
     epochs=100,
     batch=16,
     imgsz=640,
@@ -140,6 +139,22 @@ results = model.train(
 pip install -r deploy/requirements_pi.txt
 python deploy/pi_inference.py
 ```
+
+### Web Inference Dashboard (React)
+```bash
+cd deploy/webapp
+npm install
+
+# Optional: place your exported ONNX model here for auto-load
+cp ../../models/exports/moskita.onnx public/models/moskita.onnx
+
+# Starts a responsive browser client with camera + uploaded-video inference
+npm run dev -- --host
+```
+
+- Default model path: `deploy/webapp/public/models/moskita.onnx`
+- If you do not copy the model into `public/models/`, the UI also lets you upload `moskita.onnx` directly at runtime.
+- The dashboard shows current FPS, average FPS, last latency, average latency, p95 latency, frame count, and latest detections.
 
 ---
 
@@ -162,7 +177,7 @@ python deploy/pi_inference.py
 2: uncovered_container
 3: drain_inlet
 4: stagnant_puddle
-5: plastic_drum
+5: drum
 6: bucket
 7: styrofoam_container
 ```

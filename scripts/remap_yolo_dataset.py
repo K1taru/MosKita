@@ -227,16 +227,8 @@ def parse_split_map(value: str) -> Dict[str, str]:
 def ensure_output_yaml(output_root: Path, target_names: Sequence[str], dry_run: bool) -> None:
     data_yaml = output_root / "data.yaml"
 
-    if data_yaml.exists():
-        existing_names = load_source_names(data_yaml)
-        if existing_names != list(target_names):
-            raise ValueError(
-                "Existing output data.yaml class names do not match --target-names"
-            )
-        return
-
     lines = [
-        "path: .",
+        f"path: '{output_root.resolve().as_posix()}'",
         "train: train/images",
         "val: val/images",
         "test: test/images",
@@ -247,6 +239,15 @@ def ensure_output_yaml(output_root: Path, target_names: Sequence[str], dry_run: 
     for idx, name in enumerate(target_names):
         lines.append(f"  {idx}: {name}")
     content = "\n".join(lines) + "\n"
+
+    if data_yaml.exists():
+        existing_names = load_source_names(data_yaml)
+        if existing_names != list(target_names):
+            raise ValueError(
+                "Existing output data.yaml class names do not match --target-names"
+            )
+        if data_yaml.read_text(encoding="utf-8") == content:
+            return
 
     if not dry_run:
         output_root.mkdir(parents=True, exist_ok=True)
