@@ -154,6 +154,7 @@ npm run dev -- --host
 
 - Default model path: `deploy/webapp/public/models/moskita.onnx`
 - If you do not copy the model into `public/models/`, the UI also lets you upload `moskita.onnx` directly at runtime.
+- Camera access works only in a secure context: use `http://localhost:5173` on the same machine, or serve the dashboard over HTTPS when opening it from another device (for example, via a LAN IP on a phone).
 - The dashboard shows current FPS, average FPS, last latency, average latency, p95 latency, frame count, and latest detections.
 
 ---

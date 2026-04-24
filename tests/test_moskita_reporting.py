@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -19,8 +20,12 @@ from utils.moskita_dataset_report import (
 )
 from utils.moskita_run_report import (
     build_detection_report,
+    collect_eval_plot_dirs,
+    collect_saved_model_paths,
     plot_detection_report,
+    resolve_training_run_dir,
     summarize_training_results,
+    training_artifact_score,
 )
 
 
@@ -195,6 +200,70 @@ class MoskitaReportingTests(unittest.TestCase):
 
         plt.close(dataset_fig)
         plt.close(detection_fig)
+
+    def test_resolve_training_run_dir_prefers_real_artifacts_over_lexicographic_name(self) -> None:
+        runs_root = self.dataset_root / "models" / "runs"
+        real_run = runs_root / "moskita_v1217"
+        wrong_run = runs_root / "moskita_v129"
+
+        (real_run / "weights").mkdir(parents=True, exist_ok=True)
+        real_run.joinpath("results.csv").write_text("epoch,metrics/mAP50(B)\n0,0.5\n", encoding="utf-8")
+        real_run.joinpath("results.png").write_bytes(b"plot")
+        real_run.joinpath("weights", "best.pt").write_bytes(b"best")
+        real_run.joinpath("weights", "last.pt").write_bytes(b"last")
+
+        wrong_run.mkdir(parents=True, exist_ok=True)
+        os.utime(real_run, (1_700_000_000, 1_700_000_000))
+        os.utime(wrong_run, (1_700_000_100, 1_700_000_100))
+
+        resolved = resolve_training_run_dir(
+            run_name="moskita_v12",
+            project_dirs=[runs_root],
+        )
+
+        self.assertEqual(resolved, real_run.resolve())
+        self.assertGreater(training_artifact_score(real_run), training_artifact_score(wrong_run))
+
+    def test_resolve_training_run_dir_uses_preferred_path_when_it_has_artifacts(self) -> None:
+        runs_root = self.dataset_root / "models" / "runs"
+        preferred_run = runs_root / "moskita_v1218"
+        older_run = runs_root / "moskita_v12"
+
+        preferred_run.joinpath("weights").mkdir(parents=True, exist_ok=True)
+        preferred_run.joinpath("weights", "best.pt").write_bytes(b"best")
+        older_run.joinpath("weights").mkdir(parents=True, exist_ok=True)
+        older_run.joinpath("weights", "best.pt").write_bytes(b"best")
+
+        resolved = resolve_training_run_dir(
+            run_name="moskita_v12",
+            project_dirs=[runs_root],
+            preferred_run_dir=preferred_run,
+        )
+
+        self.assertEqual(resolved, preferred_run.resolve())
+
+    def test_collect_eval_plot_dirs_and_saved_paths_include_primary_run_first(self) -> None:
+        run_dir = self.dataset_root / "models" / "runs" / "moskita_v12"
+        detect_root = self.dataset_root / "runs" / "detect"
+        val_dir = detect_root / "val2"
+
+        run_dir.joinpath("weights").mkdir(parents=True, exist_ok=True)
+        run_dir.joinpath("weights", "best.pt").write_bytes(b"best")
+        run_dir.joinpath("results.csv").write_text("epoch,metrics/mAP50(B)\n0,0.5\n", encoding="utf-8")
+        val_dir.mkdir(parents=True, exist_ok=True)
+
+        saved_paths = collect_saved_model_paths(run_dir)
+        plot_dirs = collect_eval_plot_dirs(
+            run_dir,
+            repo_root=self.dataset_root,
+            notebook_dir=self.dataset_root / "notebooks",
+            cwd=self.dataset_root,
+        )
+
+        self.assertEqual(saved_paths["best_weights"], (run_dir / "weights" / "best.pt").resolve())
+        self.assertEqual(saved_paths["results_csv"], (run_dir / "results.csv").resolve())
+        self.assertEqual(plot_dirs[0], run_dir.resolve())
+        self.assertIn(val_dir.resolve(), plot_dirs)
 
 
 if __name__ == "__main__":

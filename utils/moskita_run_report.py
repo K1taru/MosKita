@@ -29,6 +29,117 @@ def load_results_dataframe(results_csv: str | Path) -> pd.DataFrame:
     return dataframe
 
 
+def _unique_existing_dirs(paths: Sequence[str | Path]) -> list[Path]:
+    resolved: list[Path] = []
+    seen: set[str] = set()
+
+    for raw_path in paths:
+        path = Path(raw_path).expanduser().resolve()
+        if not path.exists() or not path.is_dir():
+            continue
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        resolved.append(path)
+
+    return resolved
+
+
+def training_artifact_score(run_dir: str | Path) -> int:
+    path = Path(run_dir).expanduser().resolve()
+    weights_dir = path / "weights"
+
+    score = 0
+    score += 3 if (path / "results.csv").exists() else 0
+    score += 2 if (weights_dir / "best.pt").exists() else 0
+    score += 1 if (weights_dir / "last.pt").exists() else 0
+    score += 1 if (path / "results.png").exists() else 0
+    score += 1 if (path / "args.yaml").exists() else 0
+    score += 1 if any((path / name).exists() for name in ("BoxPR_curve.png", "confusion_matrix.png")) else 0
+    return score
+
+
+def resolve_training_run_dir(
+    run_name: str,
+    project_dirs: Sequence[str | Path],
+    preferred_run_dir: str | Path | None = None,
+) -> Path:
+    candidate_dirs: list[Path] = []
+    preferred_path = None if preferred_run_dir is None else Path(preferred_run_dir).expanduser().resolve()
+
+    if preferred_path is not None and training_artifact_score(preferred_path) > 0:
+        return preferred_path
+
+    for raw_base in project_dirs:
+        base = Path(raw_base).expanduser().resolve()
+        if not base.exists() or not base.is_dir():
+            continue
+
+        direct_path = base / run_name
+        if direct_path.exists() and direct_path.is_dir():
+            candidate_dirs.append(direct_path)
+
+        candidate_dirs.extend(path for path in base.glob(f"{run_name}*") if path.is_dir())
+
+    candidate_dirs = _unique_existing_dirs(candidate_dirs)
+    if candidate_dirs:
+        return max(
+            candidate_dirs,
+            key=lambda path: (
+                training_artifact_score(path),
+                path.stat().st_mtime,
+                int(path.name == run_name),
+            ),
+        )
+
+    if preferred_path is not None:
+        return preferred_path
+
+    if project_dirs:
+        return (Path(project_dirs[0]).expanduser().resolve() / run_name).resolve()
+
+    return (Path.cwd().resolve() / run_name).resolve()
+
+
+def collect_eval_plot_dirs(
+    primary_run_dir: str | Path,
+    repo_root: str | Path | None = None,
+    notebook_dir: str | Path | None = None,
+    cwd: str | Path | None = None,
+) -> list[Path]:
+    root = Path.cwd().resolve() if repo_root is None else Path(repo_root).expanduser().resolve()
+    notebook_root = Path.cwd().resolve() if notebook_dir is None else Path(notebook_dir).expanduser().resolve()
+    current_dir = Path.cwd().resolve() if cwd is None else Path(cwd).expanduser().resolve()
+
+    candidates: list[Path] = [Path(primary_run_dir).expanduser().resolve()]
+    detect_bases = (
+        root / "runs" / "detect",
+        notebook_root / "runs" / "detect",
+        current_dir / "runs" / "detect",
+    )
+
+    for base in detect_bases:
+        if not base.exists() or not base.is_dir():
+            continue
+        candidates.extend(sorted(base.glob("val*"), key=lambda path: path.stat().st_mtime, reverse=True))
+
+    return _unique_existing_dirs(candidates)
+
+
+def collect_saved_model_paths(run_dir: str | Path) -> dict[str, Path]:
+    path = Path(run_dir).expanduser().resolve()
+    weights_dir = path / "weights"
+    saved_paths = {
+        "run_dir": path,
+        "results_csv": path / "results.csv",
+        "train_log": path / "train.log",
+        "best_weights": weights_dir / "best.pt",
+        "last_weights": weights_dir / "last.pt",
+    }
+    return saved_paths
+
+
 def summarize_training_results(dataframe: pd.DataFrame) -> dict[str, Any]:
     required_columns = {
         "epoch",

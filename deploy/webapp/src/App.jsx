@@ -11,6 +11,14 @@ import { decodeYoloOutput } from './lib/yolo';
 
 const DEFAULT_MODEL_PATH = '/models/moskita.onnx';
 const MODEL_INPUT_SIZE = 640;
+const CAMERA_CONSTRAINTS = {
+  audio: false,
+  video: {
+    facingMode: { ideal: 'environment' },
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+  },
+};
 
 ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
 ort.env.wasm.numThreads = Math.min(4, Math.max(1, Math.floor((navigator.hardwareConcurrency ?? 2) / 2)));
@@ -79,6 +87,71 @@ function drawOverlay(video, canvas, detections) {
     context.fillStyle = '#f7f4ed';
     context.fillText(label, labelX + 9, labelY + 5);
   });
+}
+
+function getLegacyGetUserMedia() {
+  if (typeof navigator === 'undefined') {
+    return null;
+  }
+
+  return navigator.getUserMedia
+    || navigator.webkitGetUserMedia
+    || navigator.mozGetUserMedia
+    || navigator.msGetUserMedia
+    || null;
+}
+
+function getUnsupportedCameraMessage() {
+  if (typeof window !== 'undefined' && window.isSecureContext === false) {
+    return 'Camera access requires a secure context. Use HTTPS, or open the app via http://localhost.';
+  }
+
+  return 'This browser does not support camera capture APIs. Try a recent Chrome, Edge, Firefox, or Safari release.';
+}
+
+function getCameraOpenErrorMessage(error) {
+  const name = error?.name;
+
+  if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+    return 'Camera permission was denied. Allow camera access in browser settings and try again.';
+  }
+
+  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
+    return 'No camera device was found on this system.';
+  }
+
+  if (name === 'NotReadableError' || name === 'TrackStartError') {
+    return 'The camera is already in use by another application.';
+  }
+
+  if (name === 'OverconstrainedError' || name === 'ConstraintNotSatisfiedError') {
+    return 'Requested camera settings are not supported on this device.';
+  }
+
+  if (name === 'SecurityError') {
+    return 'Camera access requires HTTPS or localhost.';
+  }
+
+  return error?.message ?? 'The camera could not be opened.';
+}
+
+async function requestCameraStream() {
+  if (typeof navigator === 'undefined') {
+    throw new Error('Camera APIs are unavailable in this environment.');
+  }
+
+  if (navigator.mediaDevices?.getUserMedia) {
+    return navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
+  }
+
+  const legacyGetUserMedia = getLegacyGetUserMedia();
+  if (legacyGetUserMedia) {
+    return new Promise((resolve, reject) => {
+      legacyGetUserMedia.call(navigator, CAMERA_CONSTRAINTS, resolve, reject);
+    });
+  }
+
+  throw new Error(getUnsupportedCameraMessage());
 }
 
 export default function App() {
@@ -157,24 +230,17 @@ export default function App() {
   }
 
   async function startCamera() {
-    if (!navigator.mediaDevices?.getUserMedia) {
+    if (!navigator.mediaDevices?.getUserMedia && !getLegacyGetUserMedia()) {
       setSourceState({
         ready: false,
         label: 'Camera unsupported',
-        error: 'This browser does not expose navigator.mediaDevices.getUserMedia().',
+        error: getUnsupportedCameraMessage(),
       });
       return;
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      });
+      const stream = await requestCameraStream();
 
       streamRef.current = stream;
       const video = videoRef.current;
@@ -191,7 +257,7 @@ export default function App() {
       setSourceState({
         ready: false,
         label: 'Camera unavailable',
-        error: error?.message ?? 'The camera could not be opened.',
+        error: getCameraOpenErrorMessage(error),
       });
     }
   }
@@ -484,7 +550,7 @@ export default function App() {
               </button>
             ) : null}
 
-            <span className="helper-copy">Rear camera is requested with `facingMode: environment` for mobile browsers.</span>
+            <span className="helper-copy">Rear camera is requested with facingMode: environment for mobile browsers. Camera APIs need HTTPS or localhost.</span>
           </div>
 
           {sourceState.error ? <p className="error-text">{sourceState.error}</p> : null}
