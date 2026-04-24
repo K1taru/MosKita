@@ -436,7 +436,7 @@ export default function App() {
   }, []);
 
   const modelHelp = modelState.status === 'error'
-    ? 'Drop moskita.onnx into deploy/webapp/public/models/ or upload the exported model manually below.'
+    ? 'Drop moskita.onnx into MosKita-Inference/public/models/ or upload the exported model manually below.'
     : 'The app first tries /models/moskita.onnx, then keeps any uploaded model in memory for the current session.';
 
   const hasVisualSource = mode === 'camera' ? cameraActive : Boolean(uploadedVideoUrl);

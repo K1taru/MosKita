@@ -1,5 +1,5 @@
 {
-  "name": "moskita-webapp",
+  "name": "moskita-inference",
   "private": true,
   "version": "0.1.0",
   "scripts": {

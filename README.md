@@ -96,8 +96,8 @@ MosKita/
 │   ├── training.ipynb                 # main training + assembly
 │   └── evaluation.ipynb
 ├── deploy/
-│   ├── pi_inference.py
-│   └── webapp/                        # React browser inference dashboard
+│   └── pi_inference.py
+├── MosKita-Inference/                 # React browser inference dashboard
 ├── scripts/
 │   ├── remap_yolo_dataset.py          # merge & remap outsource datasets
 │   └── class_maps/                    # JSON maps + v1_target_names.txt
@@ -142,17 +142,17 @@ python deploy/pi_inference.py
 
 ### Web Inference Dashboard (React)
 ```bash
-cd deploy/webapp
+cd MosKita-Inference
 npm install
 
 # Optional: place your exported ONNX model here for auto-load
-cp ../../models/exports/moskita.onnx public/models/moskita.onnx
+cp ../models/exports/moskita.onnx public/models/moskita.onnx
 
 # Starts a responsive browser client with camera + uploaded-video inference
 npm run dev -- --host
 ```
 
-- Default model path: `deploy/webapp/public/models/moskita.onnx`
+- Default model path: `MosKita-Inference/public/models/moskita.onnx`
 - If you do not copy the model into `public/models/`, the UI also lets you upload `moskita.onnx` directly at runtime.
 - Camera access works only in a secure context: use `http://localhost:5173` on the same machine, or serve the dashboard over HTTPS when opening it from another device (for example, via a LAN IP on a phone).
 - The dashboard shows current FPS, average FPS, last latency, average latency, p95 latency, frame count, and latest detections.
