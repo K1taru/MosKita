@@ -145,15 +145,12 @@ python deploy/pi_inference.py
 cd MosKita-Inference
 npm install
 
-# Optional: place your exported ONNX model here for auto-load
-cp ../models/exports/moskita.onnx public/models/moskita.onnx
-
 # Starts a responsive browser client with camera + uploaded-video inference
 npm run dev -- --host
 ```
 
-- Default model path: `MosKita-Inference/public/models/moskita.onnx`
-- If you do not copy the model into `public/models/`, the UI also lets you upload `moskita.onnx` directly at runtime.
+- Default model path: `models/exports/moskita.onnx`, served by Vite at `/models/exports/moskita.onnx`.
+- The dashboard reads from the shared repo-level `models/` folder; the UI also lets you upload an ONNX model directly at runtime.
 - Camera access works only in a secure context: use `http://localhost:5173` on the same machine, or serve the dashboard over HTTPS when opening it from another device (for example, via a LAN IP on a phone).
 - The dashboard shows current FPS, average FPS, last latency, average latency, p95 latency, frame count, and latest detections.
 

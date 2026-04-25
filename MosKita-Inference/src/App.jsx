@@ -9,7 +9,7 @@ import {
 } from './lib/performance';
 import { decodeYoloOutput } from './lib/yolo';
 
-const DEFAULT_MODEL_PATH = '/models/moskita.onnx';
+const DEFAULT_MODEL_PATH = '/models/exports/moskita.onnx';
 const MODEL_INPUT_SIZE = 640;
 const CAMERA_CONSTRAINTS = {
   audio: false,
@@ -502,8 +502,8 @@ export default function App() {
   }, [mode, uploadedImageUrl, modelVersion, confidenceThreshold, iouThreshold]);
 
   const modelHelp = modelState.status === 'error'
-    ? 'Drop moskita.onnx into MosKita-Inference/public/models/ or upload the exported model manually below.'
-    : 'The app first tries /models/moskita.onnx, then keeps any uploaded model in memory for the current session.';
+    ? 'Run the notebook export cell so models/exports/moskita.onnx exists, or upload an exported model manually below.'
+    : 'The app first tries /models/exports/moskita.onnx from the shared repo model folder, then keeps any uploaded model in memory for the current session.';
 
   const hasVisualSource = mode === 'camera' || (mode === 'video' && uploadedVideoUrl) || (mode === 'image' && uploadedImageUrl);
 
@@ -512,7 +512,7 @@ export default function App() {
       <header className="card hero">
         <div>
           <p className="eyebrow">MosKita Edge Dashboard</p>
-          <h1>Responsive React inference for field camera and uploaded video.</h1>
+          <h1>Inference for Mosquito Breeding Site Detection</h1>
           <p className="lede">
             Run your exported ONNX detector in the browser, switch between live rear-camera capture
             uploaded footage, and still images while tracking throughput with frame-rate plus latency metrics.
