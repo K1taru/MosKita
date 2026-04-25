@@ -40,13 +40,19 @@ function clearOverlay(canvas) {
   context.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-function drawOverlay(video, canvas, detections) {
-  if (!video || !canvas) {
+function getSourceDimensions(source) {
+  return {
+    width: source?.videoWidth || source?.naturalWidth || source?.width || 0,
+    height: source?.videoHeight || source?.naturalHeight || source?.height || 0,
+  };
+}
+
+function drawOverlay(source, canvas, detections) {
+  if (!source || !canvas) {
     return;
   }
 
-  const width = video.videoWidth;
-  const height = video.videoHeight;
+  const { width, height } = getSourceDimensions(source);
   if (!width || !height) {
     return;
   }
@@ -156,6 +162,7 @@ async function requestCameraStream() {
 
 export default function App() {
   const videoRef = useRef(null);
+  const imageRef = useRef(null);
   const overlayRef = useRef(null);
   const inputCanvasRef = useRef(null);
   const sessionRef = useRef(null);
@@ -169,12 +176,16 @@ export default function App() {
   const confidenceRef = useRef(0.4);
   const iouRef = useRef(0.45);
   const uploadedVideoUrlRef = useRef('');
+  const uploadedImageUrlRef = useRef('');
 
   const [mode, setMode] = useState('camera');
   const [cameraActive, setCameraActive] = useState(false);
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState('');
   const [uploadedVideoName, setUploadedVideoName] = useState('');
+  const [uploadedImageUrl, setUploadedImageUrl] = useState('');
+  const [uploadedImageName, setUploadedImageName] = useState('');
   const [uploadedModelName, setUploadedModelName] = useState('');
+  const [modelVersion, setModelVersion] = useState(0);
   const [confidenceThreshold, setConfidenceThreshold] = useState(0.4);
   const [iouThreshold, setIouThreshold] = useState(0.45);
   const [modelState, setModelState] = useState({
@@ -214,6 +225,7 @@ export default function App() {
       sessionRef.current = session;
       resetPerformance();
       setDetections([]);
+      setModelVersion((version) => version + 1);
       setModelState({
         status: 'ready',
         label: `${label} · wasm`,
@@ -289,6 +301,59 @@ export default function App() {
     }
   }
 
+  function revokeUploadedImageUrl() {
+    if (uploadedImageUrlRef.current) {
+      URL.revokeObjectURL(uploadedImageUrlRef.current);
+      uploadedImageUrlRef.current = '';
+    }
+  }
+
+  async function runInferenceOnSource(source) {
+    const session = sessionRef.current;
+    if (!session || !source) {
+      return;
+    }
+
+    const frameStartedAt = performance.now();
+    const { tensor, letterbox } = createInputTensor(source, {
+      inputSize: MODEL_INPUT_SIZE,
+      canvas: inputCanvasRef.current,
+    });
+    const feeds = { [session.inputNames[0]]: tensor };
+    const results = await session.run(feeds);
+    const outputName = session.outputNames[0];
+    const parsedDetections = decodeYoloOutput(results[outputName], {
+      classNames: CLASS_NAMES,
+      confidenceThreshold: confidenceRef.current,
+      iouThreshold: iouRef.current,
+      letterbox,
+    });
+
+    drawOverlay(source, overlayRef.current, parsedDetections);
+
+    const frameCompletedAt = performance.now();
+    const frameLatency = frameCompletedAt - frameStartedAt;
+    const currentFps = lastCompletedAtRef.current
+      ? 1000 / (frameCompletedAt - lastCompletedAtRef.current)
+      : 0;
+
+    lastCompletedAtRef.current = frameCompletedAt;
+    framesProcessedRef.current += 1;
+    latencySamplesRef.current = pushWindowSample(latencySamplesRef.current, frameLatency);
+    fpsSamplesRef.current = pushWindowSample(fpsSamplesRef.current, currentFps);
+
+    setDetections(parsedDetections);
+    setPerformanceState(
+      summarizePerformance({
+        latencySamples: latencySamplesRef.current,
+        fpsSamples: fpsSamplesRef.current,
+        framesProcessed: framesProcessedRef.current,
+        lastDetectionCount: parsedDetections.length,
+      }),
+    );
+    setRuntimeError('');
+  }
+
   function handleVideoSelected(event) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -296,11 +361,35 @@ export default function App() {
     }
 
     revokeUploadedVideoUrl();
+    revokeUploadedImageUrl();
     const nextUrl = URL.createObjectURL(file);
     uploadedVideoUrlRef.current = nextUrl;
     setUploadedVideoUrl(nextUrl);
     setUploadedVideoName(file.name);
-    setMode('upload');
+    setUploadedImageUrl('');
+    setUploadedImageName('');
+    setMode('video');
+    resetPerformance();
+    setDetections([]);
+    setSourceState({ ready: false, label: file.name, error: '' });
+    event.target.value = '';
+  }
+
+  function handleImageSelected(event) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    revokeUploadedVideoUrl();
+    revokeUploadedImageUrl();
+    const nextUrl = URL.createObjectURL(file);
+    uploadedImageUrlRef.current = nextUrl;
+    setUploadedImageUrl(nextUrl);
+    setUploadedImageName(file.name);
+    setUploadedVideoUrl('');
+    setUploadedVideoName('');
+    setMode('image');
     resetPerformance();
     setDetections([]);
     setSourceState({ ready: false, label: file.name, error: '' });
@@ -336,20 +425,23 @@ export default function App() {
 
   useEffect(() => {
     if (mode === 'camera') {
-      void startCamera();
       return () => {
         stopCamera();
       };
     }
 
     stopCamera();
-    if (!uploadedVideoUrl) {
+    if (mode === 'video' && !uploadedVideoUrl) {
       setSourceState({ ready: false, label: 'Upload a video to begin', error: '' });
+      clearOverlay(overlayRef.current);
+    }
+    if (mode === 'image' && !uploadedImageUrl) {
+      setSourceState({ ready: false, label: 'Upload an image to begin', error: '' });
       clearOverlay(overlayRef.current);
     }
 
     return undefined;
-  }, [mode, uploadedVideoUrl]);
+  }, [mode, uploadedVideoUrl, uploadedImageUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -372,46 +464,8 @@ export default function App() {
       }
 
       processingRef.current = true;
-      const frameStartedAt = performance.now();
-
       try {
-        const { tensor, letterbox } = createInputTensor(video, {
-          inputSize: MODEL_INPUT_SIZE,
-          canvas: inputCanvasRef.current,
-        });
-        const feeds = { [session.inputNames[0]]: tensor };
-        const results = await session.run(feeds);
-        const outputName = session.outputNames[0];
-        const parsedDetections = decodeYoloOutput(results[outputName], {
-          classNames: CLASS_NAMES,
-          confidenceThreshold: confidenceRef.current,
-          iouThreshold: iouRef.current,
-          letterbox,
-        });
-
-        drawOverlay(video, overlayRef.current, parsedDetections);
-
-        const frameCompletedAt = performance.now();
-        const frameLatency = frameCompletedAt - frameStartedAt;
-        const currentFps = lastCompletedAtRef.current
-          ? 1000 / (frameCompletedAt - lastCompletedAtRef.current)
-          : 0;
-
-        lastCompletedAtRef.current = frameCompletedAt;
-        framesProcessedRef.current += 1;
-        latencySamplesRef.current = pushWindowSample(latencySamplesRef.current, frameLatency);
-        fpsSamplesRef.current = pushWindowSample(fpsSamplesRef.current, currentFps);
-
-        setDetections(parsedDetections);
-        setPerformanceState(
-          summarizePerformance({
-            latencySamples: latencySamplesRef.current,
-            fpsSamples: fpsSamplesRef.current,
-            framesProcessed: framesProcessedRef.current,
-            lastDetectionCount: parsedDetections.length,
-          }),
-        );
-        setRuntimeError('');
+        await runInferenceOnSource(video);
       } catch (error) {
         setRuntimeError(error?.message ?? 'Frame inference failed.');
       } finally {
@@ -431,15 +485,27 @@ export default function App() {
     return () => {
       stopCamera();
       revokeUploadedVideoUrl();
+      revokeUploadedImageUrl();
       cancelAnimationFrame(rafRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const image = imageRef.current;
+    if (mode !== 'image' || !uploadedImageUrl || !image?.complete) {
+      return;
+    }
+
+    runInferenceOnSource(image).catch((error) => {
+      setRuntimeError(error?.message ?? 'Image inference failed.');
+    });
+  }, [mode, uploadedImageUrl, modelVersion, confidenceThreshold, iouThreshold]);
 
   const modelHelp = modelState.status === 'error'
     ? 'Drop moskita.onnx into MosKita-Inference/public/models/ or upload the exported model manually below.'
     : 'The app first tries /models/moskita.onnx, then keeps any uploaded model in memory for the current session.';
 
-  const hasVisualSource = mode === 'camera' ? cameraActive : Boolean(uploadedVideoUrl);
+  const hasVisualSource = mode === 'camera' || (mode === 'video' && uploadedVideoUrl) || (mode === 'image' && uploadedImageUrl);
 
   return (
     <div className="shell">
@@ -449,7 +515,7 @@ export default function App() {
           <h1>Responsive React inference for field camera and uploaded video.</h1>
           <p className="lede">
             Run your exported ONNX detector in the browser, switch between live rear-camera capture
-            and uploaded footage, and track throughput with frame-rate plus latency metrics.
+            uploaded footage, and still images while tracking throughput with frame-rate plus latency metrics.
           </p>
         </div>
 
@@ -482,51 +548,78 @@ export default function App() {
               </button>
               <button
                 type="button"
-                className={mode === 'upload' ? 'mode-button active' : 'mode-button'}
-                onClick={() => setMode('upload')}
+                className={mode === 'video' ? 'mode-button active' : 'mode-button'}
+                onClick={() => setMode('video')}
               >
                 Video Upload
+              </button>
+              <button
+                type="button"
+                className={mode === 'image' ? 'mode-button active' : 'mode-button'}
+                onClick={() => setMode('image')}
+              >
+                Image Upload
               </button>
             </div>
           </div>
 
           {hasVisualSource ? (
             <div className="viewer-stack">
-              <video
-                ref={videoRef}
-                className="viewer-media"
-                muted
-                playsInline
-                autoPlay={mode === 'camera'}
-                controls={mode === 'upload'}
-                src={mode === 'upload' ? uploadedVideoUrl : undefined}
-                onLoadedMetadata={() => {
-                  const video = videoRef.current;
-                  if (video?.videoWidth && video?.videoHeight) {
+              {mode === 'image' ? (
+                <img
+                  ref={imageRef}
+                  className="viewer-media"
+                  src={uploadedImageUrl}
+                  alt={uploadedImageName}
+                  onLoad={(event) => {
+                    const image = event.currentTarget;
                     setSourceState({
                       ready: true,
-                      label:
-                        mode === 'camera'
-                          ? `Rear camera ${video.videoWidth}×${video.videoHeight}`
-                          : `${uploadedVideoName} · ${video.videoWidth}×${video.videoHeight}`,
+                      label: `${uploadedImageName} · ${image.naturalWidth}×${image.naturalHeight}`,
                       error: '',
                     });
-                    if (mode === 'upload') {
-                      video.play().catch(() => undefined);
+                    runInferenceOnSource(image).catch((error) => {
+                      setRuntimeError(error?.message ?? 'Image inference failed.');
+                    });
+                  }}
+                />
+              ) : (
+                <video
+                  ref={videoRef}
+                  className="viewer-media"
+                  muted
+                  playsInline
+                  autoPlay={mode === 'camera'}
+                  controls={mode === 'video'}
+                  src={mode === 'video' ? uploadedVideoUrl : undefined}
+                  onLoadedMetadata={() => {
+                    const video = videoRef.current;
+                    if (video?.videoWidth && video?.videoHeight) {
+                      setSourceState({
+                        ready: true,
+                        label:
+                          mode === 'camera'
+                            ? `Rear camera ${video.videoWidth}×${video.videoHeight}`
+                            : `${uploadedVideoName} · ${video.videoWidth}×${video.videoHeight}`,
+                        error: '',
+                      });
+                      if (mode === 'video') {
+                        video.play().catch(() => undefined);
+                      }
                     }
-                  }
-                }}
-                onPause={() => clearOverlay(overlayRef.current)}
-                onEnded={() => clearOverlay(overlayRef.current)}
-              />
+                  }}
+                  onPause={() => clearOverlay(overlayRef.current)}
+                  onEnded={() => clearOverlay(overlayRef.current)}
+                />
+              )}
               <canvas ref={overlayRef} className="viewer-overlay" />
             </div>
           ) : (
             <div className="placeholder">
-              <strong>{mode === 'camera' ? 'Camera preview is idle.' : 'Upload a video to start inference.'}</strong>
+              <strong>{mode === 'image' ? 'Upload an image to start inference.' : 'Upload a video to start inference.'}</strong>
               <span>
-                {mode === 'camera'
-                  ? 'Rear camera permission is requested automatically and optimized for mobile.'
+                {mode === 'image'
+                  ? 'Choose a .jpg, .png, or .webp image. Detections render over the still frame.'
                   : 'Choose an .mp4, .mov, or .webm clip. Detections render over the video frame.'}
               </span>
             </div>
@@ -537,14 +630,19 @@ export default function App() {
               <button type="button" className="action-button" onClick={cameraActive ? stopCamera : startCamera}>
                 {cameraActive ? 'Stop Camera' : 'Start Camera'}
               </button>
-            ) : (
+            ) : mode === 'video' ? (
               <label className="action-button upload-button">
                 Upload Video
                 <input type="file" accept="video/*" onChange={handleVideoSelected} />
               </label>
+            ) : (
+              <label className="action-button upload-button">
+                Upload Image
+                <input type="file" accept="image/*" onChange={handleImageSelected} />
+              </label>
             )}
 
-            {mode === 'upload' && uploadedVideoUrl ? (
+            {mode === 'video' && uploadedVideoUrl ? (
               <button type="button" className="action-button secondary" onClick={handleReplay}>
                 Replay Clip
               </button>
