@@ -9,7 +9,7 @@ import {
 } from './lib/performance';
 import { decodeYoloOutput } from './lib/yolo';
 
-const DEFAULT_MODEL_PATH = '/models/exports/moskita.onnx';
+const DEFAULT_MODEL_PATH = '/models/exports/moskita_moskita-v12_yolo26n_img640_ep15.onnx';
 const MODEL_INPUT_SIZE = 640;
 const CAMERA_CONSTRAINTS = {
   audio: false,
