@@ -10,8 +10,8 @@ import {
 import { decodeYoloOutput } from './lib/yolo';
 
 const DEFAULT_MODEL_CANDIDATE_PATHS = Object.freeze([
-  'models/exports/moskita.onnx',
   'models/exports/moskita_moskita-v12_yolo26n_img640_ep70.onnx',
+  'models/exports/moskita.onnx',
   'models/moskita.onnx',
 ]);
 const MODEL_URL_OVERRIDE = (import.meta.env.VITE_MODEL_URL ?? '').trim();
@@ -647,8 +647,10 @@ export default function App() {
   }, [mode, uploadedImageUrl, modelVersion, confidenceThreshold, iouThreshold]);
 
   const modelHelp = modelState.status === 'error'
-    ? 'Place a real ONNX binary at /models/exports/moskita.onnx (or BASE_URL/models/exports/moskita.onnx for static hosting), ensure it is not a Git LFS pointer file, then reload. Upload is also supported below.'
-    : 'The app auto-tries default model paths (/models/exports/moskita.onnx, /models/exports/moskita_moskita-v12_yolo26n_img640_ep70.onnx, and BASE_URL variants), then keeps uploaded ONNX models in memory for the current session.';
+    ? 'Place a real ONNX binary at /models/exports/moskita_moskita-v12_yolo26n_img640_ep70.onnx (or BASE_URL/models/exports/moskita_moskita-v12_yolo26n_img640_ep70.onnx for static hosting), ensure it is not a Git LFS pointer file, then reload. Upload is also supported below.'
+    : 'The app auto-tries default model paths (starting with /models/exports/moskita_moskita-v12_yolo26n_img640_ep70.onnx, then /models/exports/moskita.onnx, plus BASE_URL variants), then keeps uploaded ONNX models in memory for the current session.';
+
+  const activeModelDisplayName = uploadedModelName || modelState.label;
 
   const hasVisualSource = mode === 'camera' || (mode === 'video' && uploadedVideoUrl) || (mode === 'image' && uploadedImageUrl);
 
@@ -666,7 +668,7 @@ export default function App() {
 
         <div className="status-strip">
           <span className={`pill pill-${modelState.status}`}>
-            Model: {modelState.status}
+            Model: {modelState.status} · {activeModelDisplayName}
           </span>
           <span className={`pill ${sourceState.ready ? 'pill-ready' : 'pill-idle'}`}>
             Source: {sourceState.label}

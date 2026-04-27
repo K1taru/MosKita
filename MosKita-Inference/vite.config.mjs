@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react';
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(dirname, '..');
 const sharedModelsDir = path.join(repoRoot, 'models');
-const defaultModelPath = path.join(sharedModelsDir, 'exports', 'moskita.onnx');
+const defaultModelPath = path.join(sharedModelsDir, 'exports', 'moskita_moskita-v12_yolo26n_img640_ep70.onnx');
 
 function getContentType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -97,7 +97,7 @@ function copyDefaultModelPlugin() {
       const outputModelDir = path.join(dirname, 'dist', 'models', 'exports');
       fs.mkdirSync(outputModelDir, { recursive: true });
 
-      const targetPath = path.join(outputModelDir, 'moskita.onnx');
+      const targetPath = path.join(outputModelDir, path.basename(defaultModelPath));
       fs.copyFileSync(defaultModelPath, targetPath);
       console.info(`[moskita] Copied ${defaultModelPath} -> ${targetPath}`);
     },
