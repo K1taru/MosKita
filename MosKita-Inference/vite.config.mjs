@@ -92,10 +92,18 @@ export default defineConfig({
     fs: {
       allow: [repoRoot],
     },
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
   },
   preview: {
     host: '0.0.0.0',
     port: 8002,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
   },
   optimizeDeps: {
     include: ['onnxruntime-web'],
