@@ -111,4 +111,110 @@ describe('YOLO decoding helpers', () => {
     });
     expect(detections[0].score).toBeCloseTo(0.82, 5);
   });
+
+  test('decodes NMS-style outputs with explicit class IDs', () => {
+    const detections = decodeYoloOutput(
+      {
+        dims: [1, 3, 6],
+        data: Float32Array.from([
+          10, 20, 110, 220, 0.91, 1,
+          50, 60, 120, 150, 0.35, 0,
+          220, 100, 300, 180, 0.88, 7,
+        ]),
+      },
+      {
+        classNames: ['discarded_tire', 'flower_pot', 'coconut_shell', 'basin', 'drain_inlet', 'drum', 'bucket', 'styrofoam_container'],
+        confidenceThreshold: 0.4,
+        iouThreshold: 0.45,
+        letterbox: {
+          scale: 1,
+          padX: 0,
+          padY: 0,
+          originalWidth: 640,
+          originalHeight: 480,
+        },
+      },
+    );
+
+    expect(detections).toHaveLength(2);
+    expect(detections[0]).toMatchObject({
+      classId: 1,
+      className: 'flower_pot',
+      x: 10,
+      y: 20,
+      width: 100,
+      height: 200,
+    });
+    expect(detections[0].score).toBeCloseTo(0.91, 5);
+    expect(detections[1].classId).toBe(7);
+  });
+
+  test('multiplies objectness and class score when objectness channel is present', () => {
+    const detections = decodeYoloOutput(
+      {
+        dims: [1, 7, 1],
+        data: Float32Array.from([
+          100,
+          120,
+          50,
+          40,
+          0.8,
+          0.2,
+          0.9,
+        ]),
+      },
+      {
+        classNames: ['bucket', 'drum'],
+        confidenceThreshold: 0.7,
+        iouThreshold: 0.45,
+        letterbox: {
+          scale: 1,
+          padX: 0,
+          padY: 0,
+          originalWidth: 640,
+          originalHeight: 480,
+        },
+      },
+    );
+
+    expect(detections).toHaveLength(1);
+    expect(detections[0]).toMatchObject({
+      classId: 1,
+      className: 'drum',
+    });
+    expect(detections[0].score).toBeCloseTo(0.72, 5);
+  });
+
+  test('normalizes logits to probabilities before thresholding', () => {
+    const detections = decodeYoloOutput(
+      {
+        dims: [1, 7, 1],
+        data: Float32Array.from([
+          240,
+          180,
+          120,
+          90,
+          2.2,
+          -2.5,
+          -1,
+        ]),
+      },
+      {
+        classNames: ['bucket', 'drum', 'basin'],
+        confidenceThreshold: 0.85,
+        iouThreshold: 0.45,
+        letterbox: {
+          scale: 1,
+          padX: 0,
+          padY: 0,
+          originalWidth: 640,
+          originalHeight: 480,
+        },
+      },
+    );
+
+    expect(detections).toHaveLength(1);
+    expect(detections[0].className).toBe('bucket');
+    expect(detections[0].score).toBeCloseTo(0.900249, 5);
+  });
 });

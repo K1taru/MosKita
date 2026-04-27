@@ -60,6 +60,129 @@ function clamp(value, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+function sigmoid(value) {
+  return 1 / (1 + Math.exp(-value));
+}
+
+function toProbability(rawScore) {
+  if (!Number.isFinite(rawScore)) {
+    return 0;
+  }
+
+  if (rawScore >= 0 && rawScore <= 1) {
+    return rawScore;
+  }
+
+  return sigmoid(rawScore);
+}
+
+function isLikelyNmsOutput(accessor, classNameCount) {
+  const { rows, channels, getValue } = accessor;
+  if (channels !== 6 || rows <= 0 || classNameCount <= channels - 4) {
+    return false;
+  }
+
+  const sampleSize = Math.min(rows, 64);
+  let confidenceLike = 0;
+  let classIdLike = 0;
+
+  for (let sampleIndex = 0; sampleIndex < sampleSize; sampleIndex += 1) {
+    const rowIndex = Math.floor((sampleIndex * rows) / sampleSize);
+    const confidence = getValue(rowIndex, 4);
+    const classId = getValue(rowIndex, 5);
+
+    if (Number.isFinite(confidence) && confidence >= 0 && confidence <= 1.25) {
+      confidenceLike += 1;
+    }
+
+    const roundedClass = Math.round(classId);
+    const looksLikeClassId = Number.isFinite(classId)
+      && classId >= -0.5
+      && classId <= Math.max(0.5, classNameCount - 0.5)
+      && Math.abs(classId - roundedClass) <= 0.25;
+
+    if (looksLikeClassId) {
+      classIdLike += 1;
+    }
+  }
+
+  return confidenceLike / sampleSize >= 0.8 && classIdLike / sampleSize >= 0.8;
+}
+
+function decodeNmsOutput(
+  accessor,
+  {
+    classNames,
+    confidenceThreshold,
+    iouThreshold,
+    letterbox,
+  },
+) {
+  const { rows, getValue } = accessor;
+  const {
+    scale = 1,
+    padX = 0,
+    padY = 0,
+    originalWidth = letterbox.inputSize ?? 640,
+    originalHeight = letterbox.inputSize ?? 640,
+  } = letterbox;
+
+  const candidates = [];
+
+  for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
+    const score = clamp(toProbability(getValue(rowIndex, 4)), 0, 1);
+    if (score < confidenceThreshold) {
+      continue;
+    }
+
+    const classId = Math.round(getValue(rowIndex, 5));
+    if (classId < 0 || classId >= classNames.length) {
+      continue;
+    }
+
+    const x1 = getValue(rowIndex, 0);
+    const y1 = getValue(rowIndex, 1);
+    const x2 = getValue(rowIndex, 2);
+    const y2 = getValue(rowIndex, 3);
+    if (![x1, y1, x2, y2].every(Number.isFinite)) {
+      continue;
+    }
+
+    const left = Math.min(x1, x2);
+    const top = Math.min(y1, y2);
+    const right = Math.max(x1, x2);
+    const bottom = Math.max(y1, y2);
+
+    const projectedX = (left - padX) / scale;
+    const projectedY = (top - padY) / scale;
+    const projectedWidth = (right - left) / scale;
+    const projectedHeight = (bottom - top) / scale;
+
+    const x = clamp(projectedX, 0, originalWidth);
+    const y = clamp(projectedY, 0, originalHeight);
+    const maxWidth = Math.max(0, originalWidth - x);
+    const maxHeight = Math.max(0, originalHeight - y);
+    const clippedWidth = clamp(projectedWidth, 0, maxWidth);
+    const clippedHeight = clamp(projectedHeight, 0, maxHeight);
+
+    if (!clippedWidth || !clippedHeight) {
+      continue;
+    }
+
+    candidates.push({
+      x,
+      y,
+      width: clippedWidth,
+      height: clippedHeight,
+      score,
+      classId,
+      className: classNames[classId],
+    });
+  }
+
+  return applyNms(candidates, iouThreshold).sort((left, right) => right.score - left.score);
+}
+
 export function intersectionOverUnion(left, right) {
   const leftX = Math.max(left.x, right.x);
   const topY = Math.max(left.y, right.y);
@@ -112,8 +235,22 @@ export function decodeYoloOutput(
     return [];
   }
 
-  const { rows, channels, getValue } = createAccessor(data, dims);
-  const classCount = channels - 4;
+  const accessor = createAccessor(data, dims);
+  const { rows, channels, getValue } = accessor;
+
+  if (isLikelyNmsOutput(accessor, classNames.length)) {
+    return decodeNmsOutput(accessor, {
+      classNames,
+      confidenceThreshold,
+      iouThreshold,
+      letterbox,
+    });
+  }
+
+  const hasObjectness = channels - 5 === classNames.length;
+  const classOffset = hasObjectness ? 5 : 4;
+  const objectnessOffset = hasObjectness ? 4 : -1;
+  const classCount = channels - classOffset;
   const resolvedClassCount = Math.min(classNames.length, classCount);
   if (resolvedClassCount <= 0) {
     return [];
@@ -130,11 +267,16 @@ export function decodeYoloOutput(
   const candidates = [];
 
   for (let rowIndex = 0; rowIndex < rows; rowIndex += 1) {
+    const objectnessScore = objectnessOffset >= 0
+      ? toProbability(getValue(rowIndex, objectnessOffset))
+      : 1;
+
     let bestScore = 0;
     let bestClassIndex = -1;
 
     for (let classIndex = 0; classIndex < resolvedClassCount; classIndex += 1) {
-      const score = getValue(rowIndex, classIndex + 4);
+      const classScore = toProbability(getValue(rowIndex, classIndex + classOffset));
+      const score = objectnessScore * classScore;
       if (score > bestScore) {
         bestScore = score;
         bestClassIndex = classIndex;

@@ -11,6 +11,7 @@ import { decodeYoloOutput } from './lib/yolo';
 
 const DEFAULT_MODEL_PATH = '/models/exports/moskita_moskita-v12_yolo26n_img640_ep70.onnx';
 const MODEL_INPUT_SIZE = 640;
+const DEFAULT_CONFIDENCE_THRESHOLD = 0.5;
 const CAMERA_CONSTRAINTS = {
   audio: false,
   video: {
@@ -29,6 +30,15 @@ function formatMetric(value, digits = 1, suffix = '') {
   }
 
   return `${value.toFixed(digits)}${suffix}`;
+}
+
+function formatConfidenceScore(score) {
+  if (!Number.isFinite(score)) {
+    return '0.0%';
+  }
+
+  const boundedScore = Math.min(1, Math.max(0, score));
+  return `${(boundedScore * 100).toFixed(1)}%`;
 }
 
 function clearOverlay(canvas) {
@@ -73,7 +83,7 @@ function drawOverlay(source, canvas, detections) {
   detections.forEach((detection) => {
     const color = CLASS_COLORS[detection.classId % CLASS_COLORS.length];
     const strokeWidth = Math.max(2, Math.round(width / 320));
-    const label = `${detection.className} ${(detection.score * 100).toFixed(1)}%`;
+    const label = `${detection.className} ${formatConfidenceScore(detection.score)}`;
     const labelWidth = context.measureText(label).width + 18;
     const labelHeight = 26;
     const labelX = detection.x;
@@ -173,7 +183,7 @@ export default function App() {
   const fpsSamplesRef = useRef([]);
   const lastCompletedAtRef = useRef(0);
   const framesProcessedRef = useRef(0);
-  const confidenceRef = useRef(0.4);
+  const confidenceRef = useRef(DEFAULT_CONFIDENCE_THRESHOLD);
   const iouRef = useRef(0.45);
   const uploadedVideoUrlRef = useRef('');
   const uploadedImageUrlRef = useRef('');
@@ -186,7 +196,7 @@ export default function App() {
   const [uploadedImageName, setUploadedImageName] = useState('');
   const [uploadedModelName, setUploadedModelName] = useState('');
   const [modelVersion, setModelVersion] = useState(0);
-  const [confidenceThreshold, setConfidenceThreshold] = useState(0.4);
+  const [confidenceThreshold, setConfidenceThreshold] = useState(DEFAULT_CONFIDENCE_THRESHOLD);
   const [iouThreshold, setIouThreshold] = useState(0.45);
   const [modelState, setModelState] = useState({
     status: 'loading',
@@ -761,7 +771,7 @@ export default function App() {
                     <div>
                       <strong>{detection.className}</strong>
                       <small>
-                        {(detection.score * 100).toFixed(1)}% · {Math.round(detection.width)}×{Math.round(detection.height)} px
+                        {formatConfidenceScore(detection.score)} · {Math.round(detection.width)}×{Math.round(detection.height)} px
                       </small>
                     </div>
                   </li>
