@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react';
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(dirname, '..');
 const sharedModelsDir = path.join(repoRoot, 'models');
+const defaultModelPath = path.join(sharedModelsDir, 'exports', 'moskita.onnx');
 
 function getContentType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -83,8 +84,28 @@ function sharedModelsPlugin() {
   };
 }
 
+function copyDefaultModelPlugin() {
+  return {
+    name: 'moskita-copy-default-model',
+    apply: 'build',
+    closeBundle() {
+      if (!fs.existsSync(defaultModelPath)) {
+        console.warn(`[moskita] Default model not found at ${defaultModelPath}; skipping static copy.`);
+        return;
+      }
+
+      const outputModelDir = path.join(dirname, 'dist', 'models', 'exports');
+      fs.mkdirSync(outputModelDir, { recursive: true });
+
+      const targetPath = path.join(outputModelDir, 'moskita.onnx');
+      fs.copyFileSync(defaultModelPath, targetPath);
+      console.info(`[moskita] Copied ${defaultModelPath} -> ${targetPath}`);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [sharedModelsPlugin(), react()],
+  plugins: [sharedModelsPlugin(), copyDefaultModelPlugin(), react()],
   server: {
     host: '0.0.0.0',
     port: 8002,

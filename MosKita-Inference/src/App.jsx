@@ -9,7 +9,12 @@ import {
 } from './lib/performance';
 import { decodeYoloOutput } from './lib/yolo';
 
-const DEFAULT_MODEL_PATH = '/models/exports/moskita_moskita-v12_yolo26n_img640_ep70.onnx';
+const DEFAULT_MODEL_CANDIDATE_PATHS = Object.freeze([
+  'models/exports/moskita.onnx',
+  'models/exports/moskita_moskita-v12_yolo26n_img640_ep70.onnx',
+  'models/moskita.onnx',
+]);
+const MODEL_URL_OVERRIDE = (import.meta.env.VITE_MODEL_URL ?? '').trim();
 const MODEL_INPUT_SIZE = 640;
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.5;
 const CAMERA_CONSTRAINTS = {
@@ -39,6 +44,109 @@ function formatConfidenceScore(score) {
 
   const boundedScore = Math.min(1, Math.max(0, score));
   return `${(boundedScore * 100).toFixed(1)}%`;
+}
+
+function normalizeBaseUrl(baseUrl) {
+  if (!baseUrl || baseUrl === '/') {
+    return '/';
+  }
+
+  return baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+}
+
+function toAbsoluteUrl(pathOrUrl) {
+  if (typeof window === 'undefined') {
+    return pathOrUrl;
+  }
+
+  try {
+    return new URL(pathOrUrl, window.location.href).toString();
+  } catch {
+    return pathOrUrl;
+  }
+}
+
+function resolveDefaultModelUrls() {
+  const resolvedUrls = new Set();
+  const baseUrl = normalizeBaseUrl(import.meta.env.BASE_URL ?? '/');
+
+  if (MODEL_URL_OVERRIDE) {
+    resolvedUrls.add(toAbsoluteUrl(MODEL_URL_OVERRIDE));
+  }
+
+  DEFAULT_MODEL_CANDIDATE_PATHS.forEach((relativePath) => {
+    const normalizedRelativePath = relativePath.replace(/^\/+/, '');
+    resolvedUrls.add(toAbsoluteUrl(`${baseUrl}${normalizedRelativePath}`));
+    resolvedUrls.add(toAbsoluteUrl(`/${normalizedRelativePath}`));
+  });
+
+  return [...resolvedUrls];
+}
+
+function decodeProbeText(arrayBuffer, byteLimit = 256) {
+  const probeLength = Math.min(arrayBuffer.byteLength, byteLimit);
+  const probeBytes = new Uint8Array(arrayBuffer.slice(0, probeLength));
+  return new TextDecoder('utf-8').decode(probeBytes).trim().toLowerCase();
+}
+
+function formatByteLength(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '0 B';
+  }
+
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function validateModelPayload(arrayBuffer, contentType, sourceUrl) {
+  if (!arrayBuffer || arrayBuffer.byteLength < 1024) {
+    throw new Error(`Downloaded file is too small (${formatByteLength(arrayBuffer?.byteLength ?? 0)}).`);
+  }
+
+  const probeText = decodeProbeText(arrayBuffer);
+  if (probeText.startsWith('version https://git-lfs.github.com/spec/v1')) {
+    throw new Error('Downloaded file is a Git LFS pointer, not the actual ONNX binary.');
+  }
+
+  const looksLikeHtml = probeText.includes('<!doctype html')
+    || probeText.includes('<html')
+    || probeText.includes('<head')
+    || probeText.includes('<body');
+  const isHtmlContentType = (contentType ?? '').toLowerCase().includes('text/html');
+
+  if (looksLikeHtml || isHtmlContentType) {
+    throw new Error(`URL returned HTML instead of ONNX bytes (${sourceUrl}).`);
+  }
+}
+
+function getModelLoadErrorMessage(error) {
+  const rawMessage = error?.message ?? 'Failed to load the ONNX model.';
+  const normalized = rawMessage.toLowerCase();
+
+  if (normalized.includes('protobuf parsing failed')) {
+    return 'Failed to parse ONNX bytes. This usually means the model URL returned HTML/404 content, a Git LFS pointer file, or a truncated upload.';
+  }
+
+  return rawMessage;
+}
+
+async function fetchModelArrayBuffer(modelUrl) {
+  const response = await fetch(modelUrl, { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status} while fetching model`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const contentType = response.headers.get('content-type') ?? '';
+  validateModelPayload(arrayBuffer, contentType, modelUrl);
+
+  return {
+    arrayBuffer,
+    byteLength: arrayBuffer.byteLength,
+  };
 }
 
 function clearOverlay(canvas) {
@@ -246,9 +354,36 @@ export default function App() {
       setModelState({
         status: 'error',
         label,
-        error: error?.message ?? 'Failed to load the ONNX model.',
+        error: getModelLoadErrorMessage(error),
       });
     }
+  }
+
+  async function loadDefaultModel() {
+    const attempts = [];
+    const candidateUrls = resolveDefaultModelUrls();
+
+    setModelState({ status: 'loading', label: 'Default model auto-detect', error: '' });
+    setRuntimeError('');
+
+    for (const modelUrl of candidateUrls) {
+      try {
+        const { arrayBuffer, byteLength } = await fetchModelArrayBuffer(modelUrl);
+        const fileName = modelUrl.split('/').pop() || 'model.onnx';
+        await loadModel(arrayBuffer, `Default model: ${fileName} (${formatByteLength(byteLength)})`);
+        return;
+      } catch (error) {
+        attempts.push(`${modelUrl} -> ${getModelLoadErrorMessage(error)}`);
+      }
+    }
+
+    sessionRef.current = null;
+    const conciseAttempts = attempts.slice(0, 3).join(' | ');
+    setModelState({
+      status: 'error',
+      label: 'Default model auto-detect',
+      error: `No valid ONNX model found at default paths. ${conciseAttempts} Copy your model to /models/exports/moskita.onnx (or BASE_URL/models/exports/moskita.onnx), then reload, or upload manually.`,
+    });
   }
 
   async function startCamera() {
@@ -430,7 +565,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    void loadModel(DEFAULT_MODEL_PATH, 'Default public model');
+    void loadDefaultModel();
   }, []);
 
   useEffect(() => {
@@ -512,8 +647,8 @@ export default function App() {
   }, [mode, uploadedImageUrl, modelVersion, confidenceThreshold, iouThreshold]);
 
   const modelHelp = modelState.status === 'error'
-    ? 'Run the notebook export cell so models/exports/moskita.onnx exists, or upload an exported model manually below.'
-    : 'The app first tries /models/exports/moskita.onnx from the shared repo model folder, then keeps any uploaded model in memory for the current session.';
+    ? 'Place a real ONNX binary at /models/exports/moskita.onnx (or BASE_URL/models/exports/moskita.onnx for static hosting), ensure it is not a Git LFS pointer file, then reload. Upload is also supported below.'
+    : 'The app auto-tries default model paths (/models/exports/moskita.onnx, /models/exports/moskita_moskita-v12_yolo26n_img640_ep70.onnx, and BASE_URL variants), then keeps uploaded ONNX models in memory for the current session.';
 
   const hasVisualSource = mode === 'camera' || (mode === 'video' && uploadedVideoUrl) || (mode === 'image' && uploadedImageUrl);
 

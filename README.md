@@ -151,6 +151,8 @@ npm run dev -- --host
 
 - Default model path: `models/exports/moskita.onnx`, served by Vite at `/models/exports/moskita.onnx`.
 - The dashboard reads from the shared repo-level `models/` folder; the UI also lets you upload an ONNX model directly at runtime.
+- For static hosting (for example, `npm run build` served by Nginx on Raspberry Pi), place the model inside the published site root at `models/exports/moskita.onnx` (for example `MosKita-Inference/dist/models/exports/moskita.onnx`) or set `VITE_MODEL_URL` to an explicit model URL before building.
+- If the repository was cloned without Git LFS assets, run `git lfs pull` so `moskita.onnx` is the real binary and not a small pointer text file.
 - Camera access works only in a secure context: use `http://localhost:5173` on the same machine, or serve the dashboard over HTTPS when opening it from another device (for example, via a LAN IP on a phone).
 - The dashboard shows current FPS, average FPS, last latency, average latency, p95 latency, frame count, and latest detections.
 
