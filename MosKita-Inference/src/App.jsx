@@ -17,6 +17,7 @@ const DEFAULT_MODEL_CANDIDATE_PATHS = Object.freeze([
 const MODEL_URL_OVERRIDE = (import.meta.env.VITE_MODEL_URL ?? '').trim();
 const MODEL_INPUT_SIZE = 640;
 const DEFAULT_CONFIDENCE_THRESHOLD = 0.5;
+const MODEL_LOAD_TIMEOUT_MS = 25000;
 const CAMERA_CONSTRAINTS = {
   audio: false,
   video: {
@@ -149,6 +150,28 @@ async function fetchModelArrayBuffer(modelUrl) {
   };
 }
 
+async function createSessionWithTimeout(modelSource) {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Model initialization timed out after ${Math.round(MODEL_LOAD_TIMEOUT_MS / 1000)}s.`));
+    }, MODEL_LOAD_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([
+      ort.InferenceSession.create(modelSource, {
+        executionProviders: ['wasm'],
+      }),
+      timeoutPromise,
+    ]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
 function clearOverlay(canvas) {
   const context = canvas?.getContext('2d');
   if (!canvas || !context) {
@@ -259,13 +282,23 @@ function getCameraOpenErrorMessage(error) {
   return error?.message ?? 'The camera could not be opened.';
 }
 
-async function requestCameraStream() {
+async function requestCameraStream(deviceId = '') {
   if (typeof navigator === 'undefined') {
     throw new Error('Camera APIs are unavailable in this environment.');
   }
 
   if (navigator.mediaDevices?.getUserMedia) {
-    return navigator.mediaDevices.getUserMedia(CAMERA_CONSTRAINTS);
+    const videoConstraints = deviceId
+      ? {
+        ...CAMERA_CONSTRAINTS.video,
+        deviceId: { exact: deviceId },
+      }
+      : CAMERA_CONSTRAINTS.video;
+
+    return navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: videoConstraints,
+    });
   }
 
   const legacyGetUserMedia = getLegacyGetUserMedia();
@@ -295,9 +328,13 @@ export default function App() {
   const iouRef = useRef(0.45);
   const uploadedVideoUrlRef = useRef('');
   const uploadedImageUrlRef = useRef('');
+  const uploadedModelBufferRef = useRef(null);
 
   const [mode, setMode] = useState('camera');
   const [cameraActive, setCameraActive] = useState(false);
+  const [videoDevices, setVideoDevices] = useState([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
+  const [refreshingDevices, setRefreshingDevices] = useState(false);
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState('');
   const [uploadedVideoName, setUploadedVideoName] = useState('');
   const [uploadedImageUrl, setUploadedImageUrl] = useState('');
@@ -331,14 +368,43 @@ export default function App() {
     setPerformanceState(createEmptyPerformance());
   }
 
+  async function refreshVideoDevices(preferredDeviceId = '') {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      setVideoDevices([]);
+      setSelectedDeviceId('');
+      return [];
+    }
+
+    setRefreshingDevices(true);
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter((device) => device.kind === 'videoinput');
+
+      setVideoDevices(cameras);
+      setSelectedDeviceId((currentDeviceId) => {
+        if (preferredDeviceId && cameras.some((device) => device.deviceId === preferredDeviceId)) {
+          return preferredDeviceId;
+        }
+
+        if (currentDeviceId && cameras.some((device) => device.deviceId === currentDeviceId)) {
+          return currentDeviceId;
+        }
+
+        return cameras[0]?.deviceId ?? '';
+      });
+
+      return cameras;
+    } finally {
+      setRefreshingDevices(false);
+    }
+  }
+
   async function loadModel(modelSource, label) {
     setModelState({ status: 'loading', label, error: '' });
     setRuntimeError('');
 
     try {
-      const session = await ort.InferenceSession.create(modelSource, {
-        executionProviders: ['wasm'],
-      });
+      const session = await createSessionWithTimeout(modelSource);
 
       sessionRef.current = session;
       resetPerformance();
@@ -349,6 +415,7 @@ export default function App() {
         label: `${label} · wasm`,
         error: '',
       });
+      return { ok: true };
     } catch (error) {
       sessionRef.current = null;
       setModelState({
@@ -356,6 +423,7 @@ export default function App() {
         label,
         error: getModelLoadErrorMessage(error),
       });
+      return { ok: false, error };
     }
   }
 
@@ -370,8 +438,12 @@ export default function App() {
       try {
         const { arrayBuffer, byteLength } = await fetchModelArrayBuffer(modelUrl);
         const fileName = modelUrl.split('/').pop() || 'model.onnx';
-        await loadModel(arrayBuffer, `Default model: ${fileName} (${formatByteLength(byteLength)})`);
-        return;
+        const loadResult = await loadModel(arrayBuffer, `Default model: ${fileName} (${formatByteLength(byteLength)})`);
+        if (loadResult.ok) {
+          return;
+        }
+
+        attempts.push(`${modelUrl} -> ${getModelLoadErrorMessage(loadResult.error)}`);
       } catch (error) {
         attempts.push(`${modelUrl} -> ${getModelLoadErrorMessage(error)}`);
       }
@@ -382,11 +454,27 @@ export default function App() {
     setModelState({
       status: 'error',
       label: 'Default model auto-detect',
-      error: `No valid ONNX model found at default paths. ${conciseAttempts} Copy your model to /models/exports/moskita.onnx (or BASE_URL/models/exports/moskita.onnx), then reload, or upload manually.`,
+      error: `No valid ONNX model found at default paths. ${conciseAttempts} Copy your model to /models/exports/moskita_moskita-v12_yolo26n_img640_ep70.onnx (or BASE_URL/models/exports/moskita_moskita-v12_yolo26n_img640_ep70.onnx), then reload, or upload manually.`,
     });
   }
 
-  async function startCamera() {
+  async function refreshModelSession() {
+    sessionRef.current = null;
+    setDetections([]);
+    resetPerformance();
+
+    if (uploadedModelBufferRef.current) {
+      await loadModel(
+        uploadedModelBufferRef.current,
+        `Uploaded model: ${uploadedModelName || 'custom_model.onnx'}`,
+      );
+      return;
+    }
+
+    await loadDefaultModel();
+  }
+
+  async function startCamera(preferredDeviceId = selectedDeviceId) {
     if (!navigator.mediaDevices?.getUserMedia && !getLegacyGetUserMedia()) {
       setSourceState({
         ready: false,
@@ -397,7 +485,26 @@ export default function App() {
     }
 
     try {
-      const stream = await requestCameraStream();
+      stopCamera();
+
+      let stream;
+      try {
+        stream = await requestCameraStream(preferredDeviceId);
+      } catch (error) {
+        const shouldFallback = Boolean(preferredDeviceId)
+          && (
+            error?.name === 'OverconstrainedError'
+            || error?.name === 'ConstraintNotSatisfiedError'
+            || error?.name === 'NotFoundError'
+            || error?.name === 'DevicesNotFoundError'
+          );
+
+        if (!shouldFallback) {
+          throw error;
+        }
+
+        stream = await requestCameraStream();
+      }
 
       streamRef.current = stream;
       const video = videoRef.current;
@@ -406,8 +513,14 @@ export default function App() {
         await video.play();
       }
 
+      const activeTrack = stream.getVideoTracks()[0];
+      const activeDeviceId = activeTrack?.getSettings?.().deviceId ?? preferredDeviceId;
+      const devices = await refreshVideoDevices(activeDeviceId);
+      const activeDeviceLabel = devices.find((device) => device.deviceId === activeDeviceId)?.label;
+      const sourceLabel = activeDeviceLabel || (preferredDeviceId ? 'Selected camera live' : 'Rear camera live');
+
       setCameraActive(true);
-      setSourceState({ ready: true, label: 'Rear camera live', error: '' });
+      setSourceState({ ready: true, label: sourceLabel, error: '' });
       setRuntimeError('');
     } catch (error) {
       setCameraActive(false);
@@ -548,6 +661,7 @@ export default function App() {
     }
 
     const buffer = await file.arrayBuffer();
+    uploadedModelBufferRef.current = buffer;
     setUploadedModelName(file.name);
     await loadModel(buffer, `Uploaded model: ${file.name}`);
     event.target.value = '';
@@ -566,6 +680,23 @@ export default function App() {
 
   useEffect(() => {
     void loadDefaultModel();
+  }, []);
+
+  useEffect(() => {
+    if (!navigator.mediaDevices?.enumerateDevices) {
+      return undefined;
+    }
+
+    void refreshVideoDevices();
+    const handleDeviceChange = () => {
+      void refreshVideoDevices();
+    };
+
+    navigator.mediaDevices.addEventListener?.('devicechange', handleDeviceChange);
+
+    return () => {
+      navigator.mediaDevices.removeEventListener?.('devicechange', handleDeviceChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -774,9 +905,46 @@ export default function App() {
 
           <div className="viewer-actions">
             {mode === 'camera' ? (
-              <button type="button" className="action-button" onClick={cameraActive ? stopCamera : startCamera}>
-                {cameraActive ? 'Stop Camera' : 'Start Camera'}
-              </button>
+              <>
+                <button type="button" className="action-button" onClick={cameraActive ? stopCamera : startCamera}>
+                  {cameraActive ? 'Stop Camera' : 'Start Camera'}
+                </button>
+
+                <label className="device-select" htmlFor="camera-device">
+                  Camera device
+                  <select
+                    id="camera-device"
+                    value={selectedDeviceId}
+                    onChange={(event) => {
+                      const nextDeviceId = event.target.value;
+                      setSelectedDeviceId(nextDeviceId);
+
+                      if (cameraActive) {
+                        void startCamera(nextDeviceId);
+                      }
+                    }}
+                  >
+                    {videoDevices.length ? (
+                      videoDevices.map((device, index) => (
+                        <option key={device.deviceId || `${device.kind}-${index}`} value={device.deviceId}>
+                          {device.label || `Camera ${index + 1}`}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="">{refreshingDevices ? 'Detecting cameras...' : 'Default camera'}</option>
+                    )}
+                  </select>
+                </label>
+
+                <button
+                  type="button"
+                  className="action-button secondary"
+                  onClick={() => void refreshVideoDevices()}
+                  disabled={refreshingDevices}
+                >
+                  {refreshingDevices ? 'Refreshing Cameras...' : 'Refresh Cameras'}
+                </button>
+              </>
             ) : mode === 'video' ? (
               <label className="action-button upload-button">
                 Upload Video
@@ -795,7 +963,7 @@ export default function App() {
               </button>
             ) : null}
 
-            <span className="helper-copy">Rear camera is requested with facingMode: environment for mobile browsers. Camera APIs need HTTPS or localhost.</span>
+            <span className="helper-copy">Select any detected camera device, then start capture. Camera APIs need HTTPS or localhost.</span>
           </div>
 
           {sourceState.error ? <p className="error-text">{sourceState.error}</p> : null}
@@ -819,6 +987,10 @@ export default function App() {
                 <small>Use the exported `moskita.onnx` from your training run.</small>
                 <input type="file" accept=".onnx,application/octet-stream" onChange={handleModelSelected} />
               </label>
+
+              <button type="button" className="action-button secondary" onClick={() => void refreshModelSession()}>
+                Refresh Model Session
+              </button>
 
               {modelState.error ? <p className="error-text">{modelState.error}</p> : null}
 

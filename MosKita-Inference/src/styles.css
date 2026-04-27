@@ -208,6 +208,23 @@ select {
   margin-top: 1rem;
 }
 
+.device-select {
+  display: grid;
+  gap: 0.35rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.76rem;
+  color: #4f6253;
+}
+
+.device-select select {
+  min-width: 220px;
+  border: 1px solid rgba(24, 38, 29, 0.2);
+  border-radius: 12px;
+  padding: 0.58rem 0.68rem;
+  background: rgba(253, 250, 244, 0.9);
+  color: #1e2d23;
+}
+
 .action-button,
 .upload-button {
   display: inline-flex;
@@ -226,6 +243,10 @@ select {
 .action-button.secondary {
   background: #d5c6aa;
   color: #253629;
+}
+
+.sidebar-card .action-button {
+  width: 100%;
 }
 
 .upload-button input,
@@ -403,7 +424,8 @@ select {
   }
 
   .action-button,
-  .upload-button {
+  .upload-button,
+  .device-select select {
     width: 100%;
   }
 }
